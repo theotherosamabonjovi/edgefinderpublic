@@ -610,38 +610,47 @@ function fmtOutcome(name, point){
 }
 function findArb(events, minPct){
   var enabled = getEnabledBooks();
-  var opps=[];
+  var opps = [];
   events.forEach(function(ev){
-    var map={};
+    // lineMap[lineKey][outcomeName] = [{book, am, dec, imp, point}]
+    // lineKey = '' for moneylines, abs(point) for spreads/totals
+    // This ensures Team A -3.5 and Team B +3.5 are treated as the same line,
+    // and a different line (e.g. -3 / +3) is checked separately.
+    var lineMap = {};
     (ev.bookmakers||[]).forEach(function(bm){
       if(!enabled.has(bm.title)) return;
       (bm.markets||[]).forEach(function(mkt){
         (mkt.outcomes||[]).forEach(function(out){
-          // Include point in key so spread/totals lines at different values
-          // are never compared against each other (e.g. +3.5 vs -3.5)
-          var key = out.name + (out.point !== undefined ? '|' + out.point : '');
-          if(!map[key]) map[key]=[];
-          var dec=toDecimal(out.price);
-          if(dec) map[key].push({book:bm.title, am:out.price, dec:dec, imp:1/dec, out:out.name, point:out.point});
+          var dec = toDecimal(out.price);
+          if(!dec) return;
+          var lineKey = out.point !== undefined ? String(Math.abs(out.point)) : '';
+          if(!lineMap[lineKey]) lineMap[lineKey] = {};
+          if(!lineMap[lineKey][out.name]) lineMap[lineKey][out.name] = [];
+          lineMap[lineKey][out.name].push({book:bm.title, am:out.price, dec:dec, imp:1/dec, point:out.point});
         });
       });
     });
-    var keys=Object.keys(map);
-    if(keys.length<2) return;
-    var best={};
-    keys.forEach(function(k){ best[k]=map[k].reduce(function(a,b){ return b.dec>a.dec?b:a; }); });
-    var sumImp=keys.reduce(function(s,k){ return s+best[k].imp; },0);
-    var pct=(1-sumImp)*100;
-    if(pct>0 && pct>=minPct){
-      opps.push({
-        type:'arb', event:ev.home_team+' vs '+ev.away_team,
-        sport:ev.sport_key, time:ev.commence_time, pct:pct, sumImp:sumImp,
-        legs:keys.map(function(k){
-          var b=best[k];
-          return {name:b.out, point:b.point, book:b.book, am:b.am, dec:b.dec, imp:b.imp, stake:(b.imp/sumImp*100).toFixed(1)};
-        })
-      });
-    }
+    // Check arb for each line independently
+    Object.keys(lineMap).forEach(function(lineKey){
+      var sides = lineMap[lineKey];
+      var names = Object.keys(sides);
+      if(names.length < 2) return;
+      var best = {};
+      names.forEach(function(n){ best[n] = sides[n].reduce(function(a,b){ return b.dec>a.dec?b:a; }); });
+      var sumImp = names.reduce(function(s,n){ return s+best[n].imp; }, 0);
+      var pct = (1-sumImp)*100;
+      if(pct > 0 && pct >= minPct){
+        opps.push({
+          type:'arb', event:ev.home_team+' vs '+ev.away_team,
+          sport:ev.sport_key, time:ev.commence_time, pct:pct, sumImp:sumImp,
+          legs:names.map(function(n){
+            var b = best[n];
+            return {name:n, point:b.point, book:b.book, am:b.am,
+              dec:b.dec, imp:b.imp, stake:(b.imp/sumImp*100).toFixed(1)};
+          })
+        });
+      }
+    });
   });
   return opps.sort(function(a,b){ return b.pct-a.pct; });
 }
@@ -692,39 +701,48 @@ function devigSimpleAverage(bbo){
 function findEV(events, minPct){
   var evMethod=(document.getElementById('evMethod')||{value:'pinnacle'}).value||'pinnacle';
   var enabled = getEnabledBooks();
-  var opps=[];
+  var opps = [];
   events.forEach(function(ev){
-    var bbo={};
+    // Same line-grouped structure as findArb
+    var lineMap = {};
     (ev.bookmakers||[]).forEach(function(bm){
       if(!enabled.has(bm.title)) return;
       (bm.markets||[]).forEach(function(mkt){
         (mkt.outcomes||[]).forEach(function(out){
-          // Same point-keying fix as findArb
-          var key = out.name + (out.point !== undefined ? '|' + out.point : '');
-          if(!bbo[key]) bbo[key]=[];
-          var dec=toDecimal(out.price);
-          if(dec) bbo[key].push({book:bm.title, am:out.price, dec:dec, name:out.name, point:out.point});
+          var dec = toDecimal(out.price);
+          if(!dec) return;
+          var lineKey = out.point !== undefined ? String(Math.abs(out.point)) : '';
+          if(!lineMap[lineKey]) lineMap[lineKey] = {};
+          if(!lineMap[lineKey][out.name]) lineMap[lineKey][out.name] = [];
+          lineMap[lineKey][out.name].push({book:bm.title, am:out.price, dec:dec, point:out.point});
         });
       });
     });
-    var names=Object.keys(bbo);
-    if(names.length<2) return;
-    var result=evMethod==='pinnacle'?devigPinnacleFirst(bbo):evMethod==='weighted'?devigWeighted(bbo):devigSimpleAverage(bbo);
-    var fair=result.fair;
-    names.forEach(function(key){
-      var bestO=bbo[key].reduce(function(a,b){ return b.dec>a.dec?b:a; });
-      var evPct=(fair[key]*bestO.dec-1)*100;
-      var kelly=Math.max(0,(fair[key]*bestO.dec-1)/(bestO.dec-1)*100*0.25);
-      var label = bestO.name + (bestO.point !== undefined ? ' ('+bestO.point+')' : '');
-      if(evPct>=minPct){
-        opps.push({
-          type:'ev', event:ev.home_team+' vs '+ev.away_team, sport:ev.sport_key, time:ev.commence_time,
-          outcome:bestO.name, point:bestO.point, book:bestO.book, am:bestO.am, dec:bestO.dec,
-          fairDec:1/fair[key], fairAm:toAmerican(1/fair[key]),
-          fairImp:fair[key]*100, bookImp:(1/bestO.dec)*100,
-          ev:evPct, kelly:kelly, devigMethod:result.method, reliable:result.reliable
-        });
-      }
+    // Devig and find EV per line
+    Object.keys(lineMap).forEach(function(lineKey){
+      var bbo = lineMap[lineKey];
+      var names = Object.keys(bbo);
+      if(names.length < 2) return;
+      var result = evMethod==='pinnacle' ? devigPinnacleFirst(bbo)
+                 : evMethod==='weighted' ? devigWeighted(bbo)
+                 : devigSimpleAverage(bbo);
+      var fair = result.fair;
+      names.forEach(function(name){
+        var bestO = bbo[name].reduce(function(a,b){ return b.dec>a.dec?b:a; });
+        var evPct = (fair[name]*bestO.dec-1)*100;
+        var kelly = Math.max(0,(fair[name]*bestO.dec-1)/(bestO.dec-1)*100*0.25);
+        if(evPct >= minPct){
+          opps.push({
+            type:'ev', event:ev.home_team+' vs '+ev.away_team,
+            sport:ev.sport_key, time:ev.commence_time,
+            outcome:name, point:bestO.point,
+            book:bestO.book, am:bestO.am, dec:bestO.dec,
+            fairDec:1/fair[name], fairAm:toAmerican(1/fair[name]),
+            fairImp:fair[name]*100, bookImp:(1/bestO.dec)*100,
+            ev:evPct, kelly:kelly, devigMethod:result.method, reliable:result.reliable
+          });
+        }
+      });
     });
   });
   return opps.sort(function(a,b){ return b.ev-a.ev; });

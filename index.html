@@ -454,10 +454,7 @@ async function testKey(){
   if(!key){ res.textContent='No key entered'; res.style.color='var(--amb)'; return; }
   res.textContent='Testing…'; res.style.color='var(--txd)';
   try{
-    // fix #1: key sent as Authorization header, not in the URL
-    var r = await fetch('https://api.the-odds-api.com/v4/sports?all=false', {
-      headers: { 'X-API-Key': key }
-    });
+    var r = await fetch('https://api.the-odds-api.com/v4/sports?all=false&apiKey='+encodeURIComponent(key));
     if(r.ok){
       var d = await r.json();
       var rem = r.headers.get('x-requests-remaining');
@@ -525,13 +522,15 @@ function sportColor(s){
 }
 
 // ── ODDS API ─────────────────────────────────────────────────────────────
-// fix #1: key sent via X-API-Key header on every request, never in the URL
-function oddsApiHeaders(){
-  return { 'X-API-Key': cfg.key };
+// The Odds API only supports apiKey as a query parameter — header auth is not
+// offered by this API. The key is therefore appended to each request URL.
+function oddsApiUrl(base){
+  var sep = base.includes('?') ? '&' : '?';
+  return base + sep + 'apiKey=' + encodeURIComponent(cfg.key);
 }
 
 async function oddsApiFetch(url){
-  var r = await fetch(url, { headers: oddsApiHeaders() });
+  var r = await fetch(oddsApiUrl(url));
   if(!r.ok){
     // fix #17: guard against non-JSON error bodies
     var body = '';
@@ -558,7 +557,7 @@ async function loadSports(){
   var btn = document.querySelector('.aux-btn');
   btn.textContent = '⏳ Loading…'; btn.disabled = true;
   try{
-    // fix #1: no key in URL — header is used instead
+    // key appended by oddsApiFetch via oddsApiUrl()
     var sports = await oddsApiFetch('https://api.the-odds-api.com/v4/sports?all=false');
     appData.sports = sports;
     var sel = document.getElementById('sportSel');
@@ -622,9 +621,9 @@ async function fetchOdds(sportKey, mkt){
   if(!cfg.key){ toast('No Odds API key — open Settings','warn'); return []; }
   if(!sportKey){ toast('Select a sport from the dropdown first','warn'); return []; }
   try{
-    // fix #1: key in header; fix #7: sportKey URL-encoded
+    // fix #7: sportKey URL-encoded; fix #6: regions encoded; key appended by oddsApiUrl()
     var url = 'https://api.the-odds-api.com/v4/sports/'+encodeURIComponent(sportKey)+'/odds'
-      +'?regions='+encodeURIComponent(cfg.regions)  // fix #6: regions encoded
+      +'?regions='+encodeURIComponent(cfg.regions)
       +'&markets='+encodeURIComponent(mkt)
       +'&oddsFormat=american';
     var data = await oddsApiFetch(url);

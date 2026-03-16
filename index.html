@@ -2,10 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<!-- Note: a Content-Security-Policy header should be added at the server level
-     when deploying this file via a web server. A CSP meta tag cannot be used here
-     because opening the file via file:// treats 'self' as the file:// origin,
-     which blocks all outbound fetch() calls to https:// APIs. -->
+<!-- CSP: works correctly when served over HTTPS (e.g. GitHub Pages).
+     Do not open via file:// — use a local server or deploy to GitHub Pages. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.the-odds-api.com https://api.kalshi.com; img-src 'none'; object-src 'none';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EdgeFinder — Arb & +EV Scanner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -396,20 +395,21 @@ let curTab = 'arb';
 function regOpp(o){ const id='op'+(oppCounter++); oppReg[id]=o; return id; }
 
 // ── PERSISTENCE ──────────────────────────────────────────────────────────
-// fix #2: only non-sensitive thresholds are stored in localStorage.
-// The API key is intentionally NOT persisted — users re-enter it each session.
+// API key and settings are persisted in localStorage so users don't re-enter
+// them on every visit. Only known scalar fields are loaded to prevent
+// prototype-pollution attacks from a tampered storage value.
 function loadCfg(){
   try{
-    var stored = JSON.parse(sessionStorage.getItem('ef_cfg')||'{}');
-    // Only load known safe scalar fields
+    var stored = JSON.parse(localStorage.getItem('ef_cfg')||'{}');
+    if(typeof stored.key     === 'string') cfg.key     = stored.key;
     if(typeof stored.regions === 'string') cfg.regions = stored.regions;
-    if(typeof stored.minEV === 'number')   cfg.minEV   = stored.minEV;
-    if(typeof stored.minArb === 'number')  cfg.minArb  = stored.minArb;
+    if(typeof stored.minEV   === 'number') cfg.minEV   = stored.minEV;
+    if(typeof stored.minArb  === 'number') cfg.minArb  = stored.minArb;
   }catch(e){}
 }
 function saveCfg(){
-  // Never store the API key
-  sessionStorage.setItem('ef_cfg', JSON.stringify({
+  localStorage.setItem('ef_cfg', JSON.stringify({
+    key:     cfg.key,
     regions: cfg.regions,
     minEV:   cfg.minEV,
     minArb:  cfg.minArb
@@ -426,7 +426,7 @@ function toast(msg, type){
 
 // ── SETTINGS MODAL ───────────────────────────────────────────────────────
 function openSet(){
-  document.getElementById('oddsKey').value = ''; // never pre-fill keys
+  document.getElementById('oddsKey').value = cfg.key || '';
   document.getElementById('oddsRegions').value = cfg.regions || 'us';
   document.getElementById('cfgMinEV').value = cfg.minEV;
   document.getElementById('cfgMinArb').value = cfg.minArb;
@@ -434,8 +434,7 @@ function openSet(){
 }
 function closeSet(){ document.getElementById('setModal').classList.remove('open'); }
 function saveSet(){
-  var newKey = document.getElementById('oddsKey').value.trim();
-  if(newKey) cfg.key = newKey; // only update key if user actually typed one
+  cfg.key     = document.getElementById('oddsKey').value.trim();
   cfg.regions = document.getElementById('oddsRegions').value.trim() || 'us';
   // fix #13: use isNaN guard so that 0 is a valid threshold, not a fallback trigger
   var evVal  = parseFloat(document.getElementById('cfgMinEV').value);

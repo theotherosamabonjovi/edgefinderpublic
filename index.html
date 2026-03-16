@@ -94,7 +94,14 @@ select.sf option{background:var(--s2)}
 .lb{color:var(--txd);font-size:9px}
 .lk{margin-left:auto;color:var(--amb);font-size:9px}
 
-/* ── MODAL ── */
+/* ── BOOK FILTER ── */
+.book-filter-list{display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto;padding-right:2px}
+.book-item{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--tx);cursor:pointer;padding:3px 0;user-select:none}
+.book-item input[type=checkbox]{accent-color:var(--grn);width:12px;height:12px;cursor:pointer;flex-shrink:0}
+.book-item.excluded{color:var(--txd);text-decoration:line-through}
+.book-filter-btns{display:flex;gap:5px;margin-top:6px}
+.book-filter-btns button{flex:1;padding:4px 0;background:transparent;border:1px solid var(--b2);border-radius:4px;color:var(--txd);font-family:var(--mono);font-size:9px;cursor:pointer;transition:all .15s}
+.book-filter-btns button:hover{border-color:var(--b3);color:var(--tx)}
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
 .ov.open{opacity:1;pointer-events:all}
 .modal{background:var(--s1);border:1px solid var(--b2);border-radius:12px;width:430px;max-width:92vw;padding:22px;transform:translateY(8px);transition:transform .2s;max-height:90vh;overflow-y:auto}
@@ -268,6 +275,17 @@ select.sf option{background:var(--s2)}
       </div>
     </div>
 
+    <div class="sb-sec">
+      <div class="sec-lbl">Sportsbooks</div>
+      <div id="bookFilterList" class="book-filter-list">
+        <div style="font-size:10px;color:var(--txd)">Scan once to populate</div>
+      </div>
+      <div class="book-filter-btns">
+        <button onclick="setAllBooks(true)">All on</button>
+        <button onclick="setAllBooks(false)">All off</button>
+      </div>
+    </div>
+
     <button class="scan-btn" id="scanBtn" onclick="runScan()">&#9654; SCAN MARKETS</button>
     <button class="aux-btn" id="loadSportsBtn" onclick="loadSports()">&#8635; Load Sports List</button>
 
@@ -318,7 +336,7 @@ function esc(str){
 }
 
 // ── STATE ────────────────────────────────────────────────────────────────
-const cfg = { key:'', regions:'us', minEV:3, minArb:0.1 };
+const cfg = { key:'', regions:'us', minEV:3, minArb:0.1, excludedBooks:[] };
 const appData = { arb:[], ev:[], sports:[] };
 let oppReg = {}, oppCounter = 0, scanning = false, curTab = 'arb';
 
@@ -330,11 +348,13 @@ function loadCfg(){
     if(typeof s.regions ==='string') cfg.regions = s.regions;
     if(typeof s.minEV   ==='number') cfg.minEV   = s.minEV;
     if(typeof s.minArb  ==='number') cfg.minArb  = s.minArb;
+    if(Array.isArray(s.excludedBooks)) cfg.excludedBooks = s.excludedBooks;
   }catch(e){}
 }
 function saveCfg(){
   localStorage.setItem('ef_cfg', JSON.stringify({
-    key:cfg.key, regions:cfg.regions, minEV:cfg.minEV, minArb:cfg.minArb
+    key:cfg.key, regions:cfg.regions, minEV:cfg.minEV, minArb:cfg.minArb,
+    excludedBooks:cfg.excludedBooks
   }));
 }
 
@@ -519,12 +539,73 @@ async function fetchOdds(sportKey, mkt){
   }
 }
 
+// ── BOOK FILTER ──────────────────────────────────────────────────────────
+// knownBooks is populated after the first scan from actual API data
+var knownBooks = [];
+
+function getEnabledBooks(){
+  var excluded = new Set(cfg.excludedBooks);
+  return new Set(knownBooks.filter(function(b){ return !excluded.has(b); }));
+}
+
+function buildBookFilter(books){
+  // Merge new books in, preserving existing known ones
+  books.forEach(function(b){ if(knownBooks.indexOf(b) === -1) knownBooks.push(b); });
+  knownBooks.sort();
+
+  var list = document.getElementById('bookFilterList');
+  if(!list) return;
+  list.innerHTML = '';
+  var excluded = new Set(cfg.excludedBooks);
+
+  knownBooks.forEach(function(book){
+    var enabled = !excluded.has(book);
+    var item = document.createElement('label');
+    item.className = 'book-item'+(enabled?'':' excluded');
+    var cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = enabled;
+    cb.addEventListener('change', function(){
+      if(this.checked){
+        cfg.excludedBooks = cfg.excludedBooks.filter(function(b){ return b !== book; });
+        item.classList.remove('excluded');
+      } else {
+        if(cfg.excludedBooks.indexOf(book) === -1) cfg.excludedBooks.push(book);
+        item.classList.add('excluded');
+      }
+      saveCfg();
+    });
+    var span = document.createElement('span');
+    span.textContent = book;
+    item.appendChild(cb);
+    item.appendChild(span);
+    list.appendChild(item);
+  });
+}
+
+function setAllBooks(enabled){
+  cfg.excludedBooks = enabled ? [] : knownBooks.slice();
+  saveCfg();
+  buildBookFilter([]);
+}
+
+// Extract all unique bookmaker names from raw event data
+function extractBooks(events){
+  var seen = {};
+  events.forEach(function(ev){
+    (ev.bookmakers||[]).forEach(function(bm){ seen[bm.title] = true; });
+  });
+  return Object.keys(seen).sort();
+}
+
 // ── ARB FINDER ───────────────────────────────────────────────────────────
 function findArb(events, minPct){
+  var enabled = getEnabledBooks();
   var opps=[];
   events.forEach(function(ev){
     var map={};
     (ev.bookmakers||[]).forEach(function(bm){
+      if(!enabled.has(bm.title)) return; // skip excluded books
       (bm.markets||[]).forEach(function(mkt){
         (mkt.outcomes||[]).forEach(function(out){
           if(!map[out.name]) map[out.name]=[];
@@ -598,10 +679,12 @@ function devigSimpleAverage(bbo){
 // ── +EV FINDER ───────────────────────────────────────────────────────────
 function findEV(events, minPct){
   var evMethod=(document.getElementById('evMethod')||{value:'pinnacle'}).value||'pinnacle';
+  var enabled = getEnabledBooks();
   var opps=[];
   events.forEach(function(ev){
     var bbo={};
     (ev.bookmakers||[]).forEach(function(bm){
+      if(!enabled.has(bm.title)) return; // skip excluded books
       (bm.markets||[]).forEach(function(mkt){
         (mkt.outcomes||[]).forEach(function(out){
           if(!bbo[out.name]) bbo[out.name]=[];
@@ -674,6 +757,8 @@ async function runScan(){
   btn.innerHTML='<span class="spin"></span>Scanning…';
   try{
     var events=await fetchAllSports(mkt,concur);
+    // Populate sportsbook filter from discovered books
+    buildBookFilter(extractBooks(events));
     appData.arb=findArb(events,minA);
     appData.ev=findEV(events,minEV);
     renderArb(); renderEV();
@@ -760,6 +845,8 @@ function init(){
   loadCfg(); updateStatus();
   document.getElementById('minEV').value  = cfg.minEV;
   document.getElementById('minArb').value = cfg.minArb;
+  // Restore any previously excluded books into the filter list
+  if(cfg.excludedBooks.length) buildBookFilter([]);
   document.getElementById('setModal').addEventListener('click', function(e){ if(e.target===this) closeSet(); });
   if(cfg.key) loadSports();
   else setTimeout(openSet, 700);

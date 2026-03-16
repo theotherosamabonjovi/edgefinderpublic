@@ -303,6 +303,14 @@ select.sf option{background:var(--s2)}
         </select>
       </div>
       <div class="inp-row">
+        <div class="inp-lbl">EV Method</div>
+        <select class="sf" id="evMethod">
+          <option value="pinnacle">Pinnacle-first (sharpest)</option>
+          <option value="weighted">Sharp-weighted</option>
+          <option value="average">Simple average (old)</option>
+        </select>
+      </div>
+      <div class="inp-row">
         <div class="inp-lbl">Concurrency (req at once)</div>
         <select class="sf" id="concurrency">
           <option value="2">2 — safe (avoid rate limits)</option>
@@ -392,7 +400,7 @@ select.sf option{background:var(--s2)}
         <div class="empty">
           <div class="empty-ico">&#128200;</div>
           <div class="empty-t">No +EV bets found yet</div>
-          <div class="empty-s">Scans all books, deviggs the consensus line, and surfaces bets where the book's implied probability is below the fair value.</div>
+          <div class="empty-s">Uses Pinnacle no-vig as the fair line (falls back to sharp-weighted). Only flags bets where a soft book's odds beat the sharp consensus.</div>
         </div>
       </div>
       <div id="pn-kalshi" style="display:none">
@@ -723,48 +731,160 @@ function findArb(events, minPct){
   return opps.sort(function(a,b){ return b.pct-a.pct; });
 }
 
-// ── +EV FINDER ───────────────────────────────────────────────────────────
+// ── DEVIG ENGINES ────────────────────────────────────────────────────────
+
+// Books ranked by sharpness. Pinnacle is the gold standard; Circa/Bookmaker
+// are sharp US books; the rest are recreational and should not set the line.
+var SHARP_WEIGHTS = {
+  'Pinnacle':       1.00,
+  'Pinnacle Sports':1.00,
+  'Bookmaker':      0.85,
+  'Circa Sports':   0.85,
+  'Betcris':        0.70,
+  'Bet365':         0.65,
+  'William Hill':   0.60,
+  'BetOnline.ag':   0.55,
+  'Unibet':         0.50,
+  'BetMGM':         0.30,
+  'DraftKings':     0.25,
+  'FanDuel':        0.25,
+  'PointsBet':      0.25,
+  'Caesars':        0.25,
+  'BetRivers':      0.20,
+  'Barstool Sportsbook': 0.15,
+  'WynnBET':        0.15
+};
+
+function bookWeight(name){ return SHARP_WEIGHTS[name] || 0.20; }
+
+function isPinnacle(name){
+  return name === 'Pinnacle' || name === 'Pinnacle Sports';
+}
+
+// Remove vig from a two-sided market using the multiplicative method.
+// Returns {outcome: fairProb} where probs sum to 1.
+function devigMultiplicative(rawImps){
+  var total = Object.values(rawImps).reduce(function(s,v){ return s+v; }, 0);
+  var fair = {};
+  Object.keys(rawImps).forEach(function(k){ fair[k] = rawImps[k] / total; });
+  return fair;
+}
+
+// Devig using Pinnacle's line only. Falls back to weighted if Pinnacle absent.
+function devigPinnacleFirst(booksByOutcome){
+  var names = Object.keys(booksByOutcome);
+  // Check if Pinnacle has all outcomes
+  var hasPinnacleAll = names.every(function(n){
+    return booksByOutcome[n].some(function(b){ return isPinnacle(b.book); });
+  });
+
+  if(hasPinnacleAll){
+    var rawImps = {};
+    names.forEach(function(n){
+      var pin = booksByOutcome[n].find(function(b){ return isPinnacle(b.book); });
+      rawImps[n] = 1 / pin.dec;
+    });
+    var fair = devigMultiplicative(rawImps);
+    return { fair:fair, method:'Pinnacle no-vig', reliable:true };
+  }
+
+  // Fall through to weighted if no Pinnacle
+  return devigWeighted(booksByOutcome);
+}
+
+// Weighted devig — sharper books count more toward the fair line.
+function devigWeighted(booksByOutcome){
+  var names = Object.keys(booksByOutcome);
+  var rawImps = {};
+  names.forEach(function(n){
+    var books = booksByOutcome[n];
+    var totalW = 0, weightedImp = 0;
+    books.forEach(function(b){
+      var w = bookWeight(b.book);
+      weightedImp += (1/b.dec) * w;
+      totalW += w;
+    });
+    rawImps[n] = totalW > 0 ? weightedImp / totalW : (1/books[0].dec);
+  });
+  var hasSharp = names.some(function(n){
+    return booksByOutcome[n].some(function(b){ return bookWeight(b.book) >= 0.55; });
+  });
+  var fair = devigMultiplicative(rawImps);
+  return { fair:fair, method:'Sharp-weighted', reliable:hasSharp };
+}
+
+// Simple average devig (legacy — least reliable)
+function devigSimpleAverage(booksByOutcome){
+  var names = Object.keys(booksByOutcome);
+  var rawImps = {};
+  names.forEach(function(n){
+    var books = booksByOutcome[n];
+    rawImps[n] = books.reduce(function(s,b){ return s+(1/b.dec); },0) / books.length;
+  });
+  var fair = devigMultiplicative(rawImps);
+  return { fair:fair, method:'Simple average', reliable:false };
+}
+
+// +EV FINDER ────────────────────────────────────────────────────────────────
 function findEV(events, minPct){
+  var evMethod = (document.getElementById('evMethod')||{value:'pinnacle'}).value || 'pinnacle';
   var opps = [];
+
   events.forEach(function(ev){
-    var all = {};
+    // Bucket all book lines by outcome
+    var booksByOutcome = {};
     (ev.bookmakers||[]).forEach(function(bm){
       (bm.markets||[]).forEach(function(mkt){
         (mkt.outcomes||[]).forEach(function(out){
-          if(!all[out.name]) all[out.name]=[];
+          if(!booksByOutcome[out.name]) booksByOutcome[out.name]=[];
           var dec = toDecimal(out.price);
-          if(dec) all[out.name].push({book:bm.title, am:out.price, dec:dec});
+          if(dec) booksByOutcome[out.name].push({book:bm.title, am:out.price, dec:dec});
         });
       });
     });
-    var names = Object.keys(all);
+
+    var names = Object.keys(booksByOutcome);
     if(names.length < 2) return;
 
-    var avgImp = {};
-    names.forEach(function(n){
-      var avgDec = all[n].reduce(function(s,o){ return s+o.dec; },0) / all[n].length;
-      avgImp[n] = 1/avgDec;
-    });
-    var totImp = names.reduce(function(s,n){ return s+avgImp[n]; }, 0);
-    var fair = {};
-    names.forEach(function(n){ fair[n] = avgImp[n]/totImp; });
+    // Pick devig engine
+    var result;
+    if(evMethod === 'pinnacle')      result = devigPinnacleFirst(booksByOutcome);
+    else if(evMethod === 'weighted') result = devigWeighted(booksByOutcome);
+    else                             result = devigSimpleAverage(booksByOutcome);
+
+    var fair = result.fair;
 
     names.forEach(function(out){
-      var bestO = all[out].reduce(function(a,b){ return b.dec>a.dec?b:a; });
-      var evPct = (fair[out]*bestO.dec - 1)*100;
+      // Best odds available across all books for this outcome
+      var bestO = booksByOutcome[out].reduce(function(a,b){ return b.dec>a.dec?b:a; });
+      // Skip if the best line IS Pinnacle and method is pinnacle (no edge vs yourself)
+      // Only flag when a soft book beats the sharp line
+      var evPct = (fair[out] * bestO.dec - 1) * 100;
       var kelly = Math.max(0, (fair[out]*bestO.dec-1)/(bestO.dec-1)*100*0.25);
+
       if(evPct >= minPct){
         opps.push({
-          type:'ev', event:ev.home_team+' vs '+ev.away_team,
-          sport:ev.sport_key, time:ev.commence_time,
-          outcome:out, book:bestO.book, am:bestO.am, dec:bestO.dec,
-          fairDec:1/fair[out], fairAm:toAmerican(1/fair[out]),
-          fairImp:fair[out]*100, bookImp:(1/bestO.dec)*100,
-          ev:evPct, kelly:kelly
+          type:'ev',
+          event: ev.home_team+' vs '+ev.away_team,
+          sport: ev.sport_key,
+          time: ev.commence_time,
+          outcome: out,
+          book: bestO.book,
+          am: bestO.am,
+          dec: bestO.dec,
+          fairDec: 1/fair[out],
+          fairAm: toAmerican(1/fair[out]),
+          fairImp: fair[out]*100,
+          bookImp: (1/bestO.dec)*100,
+          ev: evPct,
+          kelly: kelly,
+          devigMethod: result.method,
+          reliable: result.reliable
         });
       }
     });
   });
+
   return opps.sort(function(a,b){ return b.ev-a.ev; });
 }
 
@@ -894,18 +1014,26 @@ function renderArb(){
 function renderEV(){
   var pn = document.getElementById('pn-ev');
   if(!appData.ev.length){
-    pn.innerHTML = '<div class="empty"><div class="empty-ico">&#128200;</div><div class="empty-t">No +EV bets found</div><div class="empty-s">No edges above threshold. Try a different sport or lower the Min EV %.</div></div>';
+    pn.innerHTML = '<div class="empty"><div class="empty-ico">&#128200;</div><div class="empty-t">No +EV bets found</div><div class="empty-s">No edges above threshold. Try lowering the Min EV % or scanning more sports.</div></div>';
     return;
   }
+  var method = appData.ev[0] ? appData.ev[0].devigMethod : '—';
+  var unreliable = appData.ev.filter(function(o){ return !o.reliable; }).length;
+  var warningBar = unreliable > 0 && method !== 'Pinnacle no-vig'
+    ? '<div style="margin-bottom:10px;padding:8px 12px;background:var(--amb2);border:1px solid var(--amb);border-radius:6px;font-size:10px;color:var(--amb)">&#9888; '+unreliable+' bet(s) used '+method+' devig — Pinnacle not available for those markets. Lower confidence.</div>'
+    : '<div style="margin-bottom:10px;padding:8px 12px;background:var(--grn2);border:1px solid var(--grn);border-radius:6px;font-size:10px;color:var(--grn)">&#10003; Devig method: '+method+' — '+appData.ev.length+' edges found</div>';
   var rows = appData.ev.map(function(o){
     var id = regOpp(o);
     var evB = o.ev>=10?'bg':o.ev>=5?'ba':'bb';
-    return '<tr><td style="font-size:11px;color:var(--txb);max-width:150px">'+o.event+'</td><td style="font-size:11px">'+o.outcome+'</td><td><span class="bk">'+o.book+'</span></td><td style="color:var(--txb);font-weight:600">'+fmtAm(o.am)+'</td><td style="color:var(--txd)">'+o.fairAm+'</td><td><span class="badge '+evB+'">+'+o.ev.toFixed(1)+'%</span></td><td style="color:var(--amb);font-size:10px">'+o.kelly.toFixed(1)+'%</td><td><button class="ai-r" onclick="analyzeRow(\''+id+'\')">AI &#9658;</button></td></tr>';
+    var reliableDot = o.reliable
+      ? '<span title="'+o.devigMethod+'" style="color:var(--grn);font-size:9px;margin-left:3px">&#9679;</span>'
+      : '<span title="Low confidence: '+o.devigMethod+'" style="color:var(--amb);font-size:9px;margin-left:3px">&#9679;</span>';
+    return '<tr><td style="font-size:11px;color:var(--txb);max-width:140px">'+o.event+'</td><td style="font-size:11px">'+o.outcome+reliableDot+'</td><td><span class="bk">'+o.book+'</span></td><td style="color:var(--txb);font-weight:600">'+fmtAm(o.am)+'</td><td style="color:var(--txd)">'+o.fairAm+'</td><td><span class="badge '+evB+'">+'+o.ev.toFixed(1)+'%</span></td><td style="color:var(--amb);font-size:10px">'+o.kelly.toFixed(1)+'%</td><td><button class="ai-r" onclick="analyzeRow(\'"+id+"\')">AI &#9658;</button></td></tr>';
   }).join('');
-  pn.innerHTML = '<table class="dt"><thead><tr><th>Event</th><th>Outcome</th><th>Book</th><th>Odds</th><th>Fair</th><th>EV %</th><th>&#188; Kelly</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+  pn.innerHTML = warningBar+'<table class="dt"><thead><tr><th>Event</th><th>Outcome</th><th>Book</th><th>Odds</th><th>Fair</th><th>EV %</th><th>&#188; Kelly</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
-// ── RENDER KALSHI ─────────────────────────────────────────────────────────
+
 function renderKalshi(){
   var pn = document.getElementById('pn-kalshi');
   var arbOnly = document.getElementById('kArbOnly').value === 'true';
@@ -1026,7 +1154,7 @@ async function analyzeRow(id){
   if(o.type === 'arb'){
     prompt = 'You are a sharp sports betting analyst. Analyze this arbitrage opportunity concisely:\n\nEvent: '+o.event+'\nSport: '+o.sport+'\nArb profit: '+o.pct.toFixed(2)+'%\nLegs:\n'+o.legs.map(function(l){ return '  * '+l.out+': '+fmtAm(l.am)+' @ '+l.book+' (stake '+l.stake+'%)'; }).join('\n')+'\n\nRate it SCORE: X/10. Cover: (1) attractiveness of the edge, (2) main risks (line movement, account limits, timing), (3) recommended action. Max 4 sentences per point.';
   } else if(o.type === 'ev'){
-    prompt = 'You are a sharp sports betting analyst. Analyze this +EV bet:\n\nEvent: '+o.event+'\nOutcome: '+o.outcome+'\nBook: '+o.book+'\nBook odds: '+fmtAm(o.am)+' ('+o.bookImp.toFixed(1)+'% implied)\nFair odds: '+o.fairAm+' ('+o.fairImp.toFixed(1)+'% fair)\nExpected value: +'+o.ev.toFixed(2)+'%\nQuarter Kelly stake: '+o.kelly.toFixed(1)+'%\n\nRate it SCORE: X/10. Cover: (1) quality of edge, (2) why this discrepancy might exist, (3) stake and timing recommendation. Max 4 sentences per point.';
+    prompt = 'You are a sharp sports betting analyst. Analyze this +EV bet:\n\nEvent: '+o.event+'\nOutcome: '+o.outcome+'\nBook: '+o.book+'\nBook odds: '+fmtAm(o.am)+' ('+o.bookImp.toFixed(1)+'% implied)\nFair odds: '+o.fairAm+' ('+o.fairImp.toFixed(1)+'% fair)\nExpected value: +'+o.ev.toFixed(2)+'%\nQuarter Kelly stake: '+o.kelly.toFixed(1)+'%\nDevig method: '+(o.devigMethod||'unknown')+(o.reliable?' (high confidence)':' (lower confidence — Pinnacle not present)')+' \n\nRate it SCORE: X/10. Cover: (1) quality of edge and confidence in the fair line, (2) why this soft book might be offering better odds than sharp consensus, (3) stake and timing recommendation. Max 4 sentences per point.';
   } else {
     prompt = 'You are a prediction market analyst. Analyze this Kalshi market:\n\nMarket: '+(o.event||o.title||o.ticker)+'\nCategory: '+(o.category||'—')+'\nYES ask: '+o.yes_ask+'¢ | NO ask: '+o.no_ask+'¢\nYES bid: '+o.yes_bid+'¢ | NO bid: '+o.no_bid+'¢\nInternal arb: '+(o.isArb?'YES — '+o.arbPct.toFixed(1)+'¢ profit':'No')+'\n24h volume: $'+((o.volume_24h||0)/1000).toFixed(1)+'k\n\nRate it SCORE: X/10. Cover: (1) market pricing assessment, (2) key factors to watch, (3) recommended position (YES/NO/pass) with reasoning. Max 3 sentences per point.';
   }

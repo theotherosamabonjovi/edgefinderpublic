@@ -2,9 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<!-- CSP: works correctly when served over HTTPS (e.g. GitHub Pages).
-     Do not open via file:// — use a local server or deploy to GitHub Pages. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.the-odds-api.com https://api.kalshi.com https://api.elections.kalshi.com https://trading-api.kalshi.com; img-src 'none'; object-src 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.the-odds-api.com; img-src 'none'; object-src 'none';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EdgeFinder — Arb & +EV Scanner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,7 +16,6 @@
   --amb:#f5a623;--amb2:#f5a62322;
   --red:#ff4757;--red2:#ff475722;
   --blu:#4a9eff;--blu2:#4a9eff22;
-  --pur:#9b6dff;--pur2:#9b6dff22;
   --tx:#b8ccec;--txd:#3a5070;--txm:#7090b0;--txb:#dceeff;
   --mono:'JetBrains Mono',monospace;--sans:'Syne',sans-serif;
 }
@@ -37,7 +34,6 @@ header{position:sticky;top:0;z-index:100;background:rgba(6,10,18,.93);border-bot
 .icon-btn:hover{border-color:var(--grn);color:var(--grn)}
 
 /* ── LAYOUT ── */
-/* Removed AI panel column — now 2-column layout */
 .grid{display:grid;grid-template-columns:228px 1fr;height:calc(100vh - 52px - 22px);position:relative;z-index:1}
 
 /* ── SIDEBAR ── */
@@ -52,7 +48,7 @@ select.sf option{background:var(--s2)}
 .stats{display:grid;grid-template-columns:1fr 1fr;gap:7px}
 .stat{background:var(--s2);border:1px solid var(--b1);border-radius:6px;padding:9px 8px;text-align:center}
 .stat-v{font-size:22px;font-weight:700;color:var(--txb);line-height:1}
-.stat-v.g{color:var(--grn)}.stat-v.a{color:var(--amb)}.stat-v.b{color:var(--blu)}
+.stat-v.g{color:var(--grn)}.stat-v.a{color:var(--amb)}
 .stat-l{font-size:8px;color:var(--txd);letter-spacing:.4px;margin-top:3px;text-transform:uppercase}
 .scan-btn{width:100%;padding:11px;background:var(--grn);color:#000;border:none;border-radius:6px;font-family:var(--sans);font-weight:700;font-size:12px;letter-spacing:.4px;cursor:pointer;transition:all .2s}
 .scan-btn:hover:not(:disabled){background:#00ff88;transform:translateY(-1px)}
@@ -97,21 +93,6 @@ select.sf option{background:var(--s2)}
 .ld{color:var(--txb);font-weight:500}
 .lb{color:var(--txd);font-size:9px}
 .lk{margin-left:auto;color:var(--amb);font-size:9px}
-
-/* ── KALSHI ── */
-.k-grid{display:flex;flex-direction:column;gap:8px}
-.k-row{background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:11px 14px;display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;transition:border-color .15s}
-.k-row:hover{border-color:var(--b2)}
-.k-row.arb{border-color:var(--grn);background:rgba(0,232,122,.025)}
-.k-t{font-size:12px;color:var(--txb);line-height:1.4;margin-bottom:4px}
-.k-m{display:flex;gap:10px;font-size:10px;color:var(--txd)}
-.k-arb-tag{font-size:10px;color:var(--grn);background:var(--grn2);border:1px solid var(--grn);border-radius:3px;padding:1px 7px;margin-top:4px;display:inline-block}
-.k-prices{display:flex;gap:10px;align-items:center}
-.k-p{text-align:center}
-.k-pl{font-size:8px;letter-spacing:.8px;text-transform:uppercase;color:var(--txd);margin-bottom:1px}
-.k-pv{font-size:14px;font-weight:600}
-.k-pv.y{color:var(--grn)}.k-pv.n{color:var(--red)}
-.k-sep{color:var(--b2);font-size:12px}
 
 /* ── MODAL ── */
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
@@ -168,8 +149,7 @@ select.sf option{background:var(--s2)}
       <div class="fgrp">
         <div class="f">
           <label>API Key</label>
-          <!-- type=password keeps key out of autocomplete history -->
-          <input type="password" id="oddsKey" placeholder="Paste your key here (theoddsapi.com)…" autocomplete="off">
+          <input type="password" id="oddsKey" placeholder="Paste your key here (theoddsapi.com)…" autocomplete="new-password">
         </div>
         <div class="f">
           <label>Regions (comma-separated)</label>
@@ -225,7 +205,7 @@ select.sf option{background:var(--s2)}
   <!-- SIDEBAR -->
   <aside class="sb">
 
-    <div class="sb-sec" id="oddsApiSection">
+    <div class="sb-sec">
       <div class="sec-lbl">Odds API</div>
       <div class="inp-row">
         <div class="inp-lbl">Scope</div>
@@ -269,30 +249,6 @@ select.sf option{background:var(--s2)}
     </div>
 
     <div class="sb-sec">
-      <div class="sec-lbl">Kalshi</div>
-      <div class="inp-row">
-        <div class="inp-lbl">Category</div>
-        <select class="sf" id="kCat">
-          <option value="">All categories</option>
-          <option value="sports">Sports</option>
-          <option value="politics">Politics</option>
-          <option value="economics">Economics</option>
-          <option value="financials">Financials</option>
-          <option value="crypto">Crypto</option>
-          <option value="pop_culture">Pop Culture</option>
-          <option value="climate">Climate</option>
-        </select>
-      </div>
-      <div class="inp-row">
-        <div class="inp-lbl">Display filter</div>
-        <select class="sf" id="kArbOnly">
-          <option value="false">All open markets</option>
-          <option value="true">Arb only (YES+NO &lt; 100)</option>
-        </select>
-      </div>
-    </div>
-
-    <div class="sb-sec">
       <div class="sec-lbl">Thresholds</div>
       <div class="inp-row">
         <div class="inp-lbl">Min EV %</div>
@@ -309,21 +265,6 @@ select.sf option{background:var(--s2)}
       <div class="stats">
         <div class="stat"><div class="stat-v g" id="stArb">0</div><div class="stat-l">Arb bets</div></div>
         <div class="stat"><div class="stat-v a" id="stEV">0</div><div class="stat-l">+EV bets</div></div>
-        <!-- fix #10/#14: stKalshiArb is now separate from the status bar stK -->
-        <div class="stat"><div class="stat-v b" id="stKalshiArb">0</div><div class="stat-l">Kalshi arb</div></div>
-        <div class="stat"><div class="stat-v" id="stMkt">0</div><div class="stat-l">Markets</div></div>
-      </div>
-    </div>
-
-    <div class="sb-sec">
-      <div class="sec-lbl">Scan Scope</div>
-      <div class="inp-row">
-        <div class="inp-lbl">What to scan</div>
-        <select class="sf" id="scanScope" onchange="onScopeChange(this.value)">
-          <option value="all">Everything (Odds + Kalshi)</option>
-          <option value="odds">Odds API only</option>
-          <option value="kalshi">Kalshi only</option>
-        </select>
       </div>
     </div>
 
@@ -341,31 +282,20 @@ select.sf option{background:var(--s2)}
       <div class="tab" onclick="setTab('ev')" id="tab-ev">
         &#128200; +EV Bets <span class="tb" id="tb-ev">0</span>
       </div>
-      <div class="tab" onclick="setTab('kalshi')" id="tab-kalshi">
-        &#127963; Kalshi <span class="tb" id="tb-kalshi">0</span>
-      </div>
     </div>
-
     <div class="res">
       <div id="pn-arb">
         <div class="empty">
           <div class="empty-ico">&#9889;</div>
           <div class="empty-t">No arbitrage found yet</div>
-          <div class="empty-s">Set your Odds API key in Settings &#9881;, select a sport, and hit Scan. Arb appears when one book's odds cancel another's vig.</div>
+          <div class="empty-s">Set your Odds API key in Settings &#9881;, select a sport, and hit Scan.</div>
         </div>
       </div>
       <div id="pn-ev" style="display:none">
         <div class="empty">
           <div class="empty-ico">&#128200;</div>
           <div class="empty-t">No +EV bets found yet</div>
-          <div class="empty-s">Uses Pinnacle no-vig as the fair line (falls back to sharp-weighted). Only flags bets where a soft book's odds beat the sharp consensus.</div>
-        </div>
-      </div>
-      <div id="pn-kalshi" style="display:none">
-        <div class="empty">
-          <div class="empty-ico">&#127963;</div>
-          <div class="empty-t">Kalshi not loaded</div>
-          <div class="empty-s">Hit Scan to fetch live Kalshi prediction markets. Internal arb is flagged when YES ask + NO ask &lt; 100&#162;.</div>
+          <div class="empty-s">Uses Pinnacle no-vig as the fair line. Only flags bets where a soft book beats the sharp consensus.</div>
         </div>
       </div>
     </div>
@@ -374,18 +304,13 @@ select.sf option{background:var(--s2)}
 </div>
 
 <!-- STATUS BAR -->
-<!-- fix #10/#14: Kalshi status uses id="stK", stats counter uses id="stKalshiArb" -->
 <div class="sbar">
   <div class="si"><div class="sd" id="sdOdds"></div><span id="stOdds">Odds API: not configured</span></div>
-  <div class="si"><div class="sd" id="sdK"></div><span id="stK">Kalshi: idle</span></div>
   <div style="margin-left:auto"><span id="lastScan">—</span></div>
 </div>
 
 <script>
 // ── HELPERS ──────────────────────────────────────────────────────────────
-
-// fix #3/#4: safe text escaping — all user/API-sourced strings must go through
-// esc() before being inserted into innerHTML.
 function esc(str){
   var d = document.createElement('div');
   d.textContent = String(str == null ? '' : str);
@@ -393,71 +318,55 @@ function esc(str){
 }
 
 // ── STATE ────────────────────────────────────────────────────────────────
-const cfg = {
-  key:'', regions:'us',
-  minEV:3, minArb:0.1
-};
-const appData = { arb:[], ev:[], kalshi:[], sports:[] };
-// fix #8: oppReg is cleared on each scan — no unbounded growth
-let oppReg = {};
-let oppCounter = 0;
-let scanning = false;
-let curTab = 'arb';
-
-function regOpp(o){ const id='op'+(oppCounter++); oppReg[id]=o; return id; }
+const cfg = { key:'', regions:'us', minEV:3, minArb:0.1 };
+const appData = { arb:[], ev:[], sports:[] };
+let oppReg = {}, oppCounter = 0, scanning = false, curTab = 'arb';
 
 // ── PERSISTENCE ──────────────────────────────────────────────────────────
-// API key and settings are persisted in localStorage so users don't re-enter
-// them on every visit. Only known scalar fields are loaded to prevent
-// prototype-pollution attacks from a tampered storage value.
 function loadCfg(){
   try{
-    var stored = JSON.parse(localStorage.getItem('ef_cfg')||'{}');
-    if(typeof stored.key     === 'string') cfg.key     = stored.key;
-    if(typeof stored.regions === 'string') cfg.regions = stored.regions;
-    if(typeof stored.minEV   === 'number') cfg.minEV   = stored.minEV;
-    if(typeof stored.minArb  === 'number') cfg.minArb  = stored.minArb;
+    var s = JSON.parse(localStorage.getItem('ef_cfg')||'{}');
+    if(typeof s.key     ==='string') cfg.key     = s.key;
+    if(typeof s.regions ==='string') cfg.regions = s.regions;
+    if(typeof s.minEV   ==='number') cfg.minEV   = s.minEV;
+    if(typeof s.minArb  ==='number') cfg.minArb  = s.minArb;
   }catch(e){}
 }
 function saveCfg(){
   localStorage.setItem('ef_cfg', JSON.stringify({
-    key:     cfg.key,
-    regions: cfg.regions,
-    minEV:   cfg.minEV,
-    minArb:  cfg.minArb
+    key:cfg.key, regions:cfg.regions, minEV:cfg.minEV, minArb:cfg.minArb
   }));
 }
 
 // ── TOAST ────────────────────────────────────────────────────────────────
 function toast(msg, type){
-  const t = document.getElementById('toast');
-  t.textContent = msg; // textContent — safe
-  t.className = 'toast ' + (type||'ok') + ' show';
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast '+(type||'ok')+' show';
   setTimeout(function(){ t.classList.remove('show'); }, 3200);
 }
 
-// ── SETTINGS MODAL ───────────────────────────────────────────────────────
+// ── SETTINGS ─────────────────────────────────────────────────────────────
 function openSet(){
-  document.getElementById('oddsKey').value      = cfg.key     || '';
-  document.getElementById('oddsRegions').value  = cfg.regions || 'us';
-  document.getElementById('cfgMinEV').value  = cfg.minEV;
-  document.getElementById('cfgMinArb').value = cfg.minArb;
+  document.getElementById('oddsKey').value     = cfg.key     || '';
+  document.getElementById('oddsRegions').value = cfg.regions || 'us';
+  document.getElementById('cfgMinEV').value    = cfg.minEV;
+  document.getElementById('cfgMinArb').value   = cfg.minArb;
   document.getElementById('setModal').classList.add('open');
 }
 function closeSet(){ document.getElementById('setModal').classList.remove('open'); }
 function saveSet(){
   cfg.key     = document.getElementById('oddsKey').value.trim();
   cfg.regions = document.getElementById('oddsRegions').value.trim() || 'us';
-  // fix #13: use isNaN guard so that 0 is a valid threshold, not a fallback trigger
-  var evVal  = parseFloat(document.getElementById('cfgMinEV').value);
-  var arbVal = parseFloat(document.getElementById('cfgMinArb').value);
-  cfg.minEV  = isNaN(evVal)  ? 3   : evVal;
-  cfg.minArb = isNaN(arbVal) ? 0.1 : arbVal;
+  var ev  = parseFloat(document.getElementById('cfgMinEV').value);
+  var arb = parseFloat(document.getElementById('cfgMinArb').value);
+  cfg.minEV  = isNaN(ev)  ? 3   : ev;
+  cfg.minArb = isNaN(arb) ? 0.1 : arb;
   document.getElementById('minEV').value  = cfg.minEV;
   document.getElementById('minArb').value = cfg.minArb;
   saveCfg(); updateStatus(); closeSet();
   toast('Settings saved!', 'ok');
-  if(cfg.key && appData.sports.length === 0) loadSports();
+  if(cfg.key && appData.sports.length===0) loadSports();
 }
 
 // ── TEST KEY ─────────────────────────────────────────────────────────────
@@ -471,45 +380,30 @@ async function testKey(){
     if(r.ok){
       var d = await r.json();
       var rem = r.headers.get('x-requests-remaining');
-      // textContent — safe, no innerHTML
-      res.textContent = '✓ Valid! '+d.length+' sports'+(rem?' · '+rem+' req left':'');
+      res.textContent='✓ Valid! '+d.length+' sports'+(rem?' · '+rem+' left':'');
       res.style.color='var(--grn)';
     } else {
-      var body = '';
-      try{ var j=await r.json(); body=j.message||j.detail||''; }catch(e2){}
-      res.textContent = '✗ '+r.status+(body?' — '+body.substring(0,60):'');
+      var body=''; try{ var j=await r.json(); body=j.message||j.detail||''; }catch(e2){}
+      res.textContent='✗ '+r.status+(body?' — '+body.substring(0,60):'');
       res.style.color='var(--red)';
     }
   }catch(e){
-    res.textContent = '✗ Network error: '+e.message.substring(0,60);
+    res.textContent='✗ '+e.message.substring(0,60);
     res.style.color='var(--red)';
   }
 }
 
 // ── STATUS BAR ───────────────────────────────────────────────────────────
 function updateStatus(){
-  var sdO = document.getElementById('sdOdds'), stO = document.getElementById('stOdds');
+  var sdO=document.getElementById('sdOdds'), stO=document.getElementById('stOdds');
   if(cfg.key){ sdO.className='sd ok'; stO.textContent='Odds API: configured'; }
   else { sdO.className='sd err'; stO.textContent='Odds API: no key'; }
-
-  document.getElementById('sdK').className='sd';
-  document.getElementById('stK').textContent='Kalshi: ready (hit Scan)';
-}
-
-// ── SCAN SCOPE ───────────────────────────────────────────────────────────
-function onScopeChange(scope){
-  var oddsOnly = scope === 'kalshi';
-  // Hide Odds-API-specific controls when scanning Kalshi only
-  ['oddsApiSection','loadSportsBtn'].forEach(function(id){
-    var el = document.getElementById(id);
-    if(el) el.style.display = oddsOnly ? 'none' : '';
-  });
 }
 
 // ── TABS ─────────────────────────────────────────────────────────────────
 function setTab(t){
-  curTab = t;
-  ['arb','ev','kalshi'].forEach(function(x){
+  curTab=t;
+  ['arb','ev'].forEach(function(x){
     document.getElementById('tab-'+x).classList.toggle('act', x===t);
     document.getElementById('pn-'+x).style.display = x===t ? '' : 'none';
   });
@@ -517,267 +411,141 @@ function setTab(t){
 
 // ── MATH ─────────────────────────────────────────────────────────────────
 function toDecimal(am){
-  var n = parseFloat(am);
-  if(isNaN(n)) return null;
-  return n > 0 ? n/100+1 : 100/Math.abs(n)+1;
+  var n=parseFloat(am); if(isNaN(n)) return null;
+  return n>0 ? n/100+1 : 100/Math.abs(n)+1;
 }
 function toAmerican(dec){
-  if(dec >= 2) return '+'+(Math.round((dec-1)*100));
-  return ''+(Math.round(-100/(dec-1)));
+  return dec>=2 ? '+'+(Math.round((dec-1)*100)) : ''+(Math.round(-100/(dec-1)));
 }
-function fmtAm(am){
-  var n = parseFloat(am);
-  return n > 0 ? '+'+n : String(n);
-}
+function fmtAm(am){ var n=parseFloat(am); return n>0?'+'+n:String(n); }
 function fmtTime(iso){
   if(!iso) return '—';
-  var d = new Date(iso);
+  var d=new Date(iso);
   return d.toLocaleDateString('en-US',{month:'short',day:'numeric'})+' '+
     d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
 }
 function sportColor(s){
-  if(!s) return 'bb';
-  var sl = s.toLowerCase();
-  if(sl.includes('football')) return 'ba';
+  if(!s) return 'bb'; var sl=s.toLowerCase();
+  if(sl.includes('football'))  return 'ba';
   if(sl.includes('basketball')) return 'bb';
-  if(sl.includes('baseball')) return 'bg';
-  if(sl.includes('hockey')) return 'bb';
+  if(sl.includes('baseball'))  return 'bg';
+  if(sl.includes('hockey'))    return 'bb';
   if(sl.includes('soccer')||sl.includes('epl')||sl.includes('mls')) return 'bg';
   if(sl.includes('mma')||sl.includes('boxing')) return 'br';
   return 'bb';
 }
 
 // ── ODDS API ─────────────────────────────────────────────────────────────
-// The Odds API only supports apiKey as a query parameter — header auth is not
-// offered by this API. The key is therefore appended to each request URL.
 function oddsApiUrl(base){
-  var sep = base.includes('?') ? '&' : '?';
-  return base + sep + 'apiKey=' + encodeURIComponent(cfg.key);
+  return base+(base.includes('?')?'&':'?')+'apiKey='+encodeURIComponent(cfg.key);
 }
-
 async function oddsApiFetch(url){
-  var r = await fetch(oddsApiUrl(url));
+  var r=await fetch(oddsApiUrl(url));
   if(!r.ok){
-    // fix #17: guard against non-JSON error bodies
-    var body = '';
+    var body='';
     try{
-      var ct = r.headers.get('content-type')||'';
-      if(ct.includes('application/json')){
-        var j = await r.json();
-        body = j.message || j.detail || JSON.stringify(j);
-      } else {
-        body = await r.text().catch(function(){ return ''; });
-      }
-    }catch(e2){ /* ignore parse errors */ }
+      var ct=r.headers.get('content-type')||'';
+      if(ct.includes('json')){ var j=await r.json(); body=j.message||j.detail||JSON.stringify(j); }
+      else body=await r.text().catch(function(){ return ''; });
+    }catch(e2){}
     throw new Error('HTTP '+r.status+(body?' — '+body.substring(0,120):''));
   }
   updateQuota(r);
-  // fix #17: guard JSON parse on success too
-  var ct2 = r.headers.get('content-type')||'';
-  if(!ct2.includes('application/json')) throw new Error('Unexpected non-JSON response from Odds API');
+  var ct2=r.headers.get('content-type')||'';
+  if(!ct2.includes('json')) throw new Error('Non-JSON response from Odds API');
   return r.json();
+}
+function updateQuota(r){
+  var rem=r.headers.get('x-requests-remaining'), used=r.headers.get('x-requests-used');
+  if(rem!==null){
+    var b=document.getElementById('quotaVal');
+    if(b) b.textContent=rem+' left'+(used?' ('+used+' used)':'');
+  }
 }
 
 async function loadSports(){
   if(!cfg.key){ toast('Set your Odds API key in Settings first','warn'); openSet(); return; }
-  var btn = document.querySelector('.aux-btn');
-  btn.textContent = '⏳ Loading…'; btn.disabled = true;
+  var btn=document.getElementById('loadSportsBtn');
+  btn.textContent='⏳ Loading…'; btn.disabled=true;
   try{
-    // key appended by oddsApiFetch via oddsApiUrl()
-    var sports = await oddsApiFetch('https://api.the-odds-api.com/v4/sports?all=false');
-    appData.sports = sports;
-    var sel = document.getElementById('sportSel');
-    sel.innerHTML = '<option value="__all__">All Sports (scan everything)</option>';
-    var grps = {};
+    var sports=await oddsApiFetch('https://api.the-odds-api.com/v4/sports?all=false');
+    appData.sports=sports;
+    var sel=document.getElementById('sportSel');
+    sel.innerHTML='<option value="__all__">All Sports (scan everything)</option>';
+    var grps={};
     sports.forEach(function(s){ if(!grps[s.group]) grps[s.group]=[]; grps[s.group].push(s); });
-    // populate group filter
-    var grpSel = document.getElementById('sportGroup');
-    grpSel.innerHTML = '<option value="">No filter — all groups</option>';
+    var grpSel=document.getElementById('sportGroup');
+    grpSel.innerHTML='<option value="">No filter — all groups</option>';
     Object.keys(grps).forEach(function(g){
-      var o = document.createElement('option');
-      o.value = g;
-      o.textContent = g+' ('+grps[g].length+')'; // textContent — safe
-      grpSel.appendChild(o);
+      var o=document.createElement('option'); o.value=g; o.textContent=g+' ('+grps[g].length+')'; grpSel.appendChild(o);
     });
-    // populate individual sports
-    Object.entries(grps).forEach(function(entry){
-      var og = document.createElement('optgroup');
-      og.label = entry[0]; // .label assignment is safe
-      entry[1].forEach(function(s){
-        var o = document.createElement('option');
-        o.value = s.key; // .value assignment is safe
-        o.textContent = s.title; // textContent — safe
-        og.appendChild(o);
-      });
+    Object.entries(grps).forEach(function(e){
+      var og=document.createElement('optgroup'); og.label=e[0];
+      e[1].forEach(function(s){ var o=document.createElement('option'); o.value=s.key; o.textContent=s.title; og.appendChild(o); });
       sel.appendChild(og);
     });
-    var totalSports = sports.length;
-    document.getElementById('scanProgressMsg').textContent = totalSports+' sports loaded. Ready to scan.';
-    toast('Loaded '+totalSports+' sports — hit Scan to scan all', 'ok');
+    document.getElementById('scanProgressMsg').textContent=sports.length+' sports loaded. Ready to scan.';
+    toast('Loaded '+sports.length+' sports','ok');
     document.getElementById('sdOdds').className='sd ok';
-    document.getElementById('stOdds').textContent='Odds API: ready ('+totalSports+' sports)';
+    document.getElementById('stOdds').textContent='Odds API: ready ('+sports.length+' sports)';
   }catch(e){
-    toast('Sports load failed: '+e.message, 'err');
+    toast('Sports load failed: '+e.message,'err');
     document.getElementById('sdOdds').className='sd err';
-    document.getElementById('stOdds').textContent='Odds API: '+e.message.substring(0,60);
-    // fix #3: build error message with DOM nodes, not innerHTML with raw strings
-    var errDiv = document.createElement('div');
-    errDiv.className = 'empty';
-    errDiv.style.cssText = 'padding:20px;color:var(--red)';
-    var hdr = document.createElement('div');
-    hdr.style.cssText = 'font-size:13px;margin-bottom:8px';
-    hdr.textContent = '⚠ Odds API Error';
-    var msg = document.createElement('div');
-    msg.style.cssText = 'font-size:11px';
-    msg.textContent = e.message;
-    var hint = document.createElement('div');
-    hint.style.cssText = 'font-size:10px;color:var(--txd);margin-top:7px;line-height:1.7';
-    hint.textContent = 'Common causes: invalid/expired key, key copied with extra spaces, free tier quota exceeded (500 req/mo).';
+    document.getElementById('stOdds').textContent='Odds API error';
+    var errDiv=document.createElement('div'); errDiv.className='empty'; errDiv.style.cssText='padding:20px';
+    var hdr=document.createElement('div'); hdr.style.cssText='font-size:13px;margin-bottom:8px;color:var(--red)'; hdr.textContent='⚠ Odds API Error';
+    var msg=document.createElement('div'); msg.style.cssText='font-size:11px;color:var(--red)'; msg.textContent=e.message;
+    var hint=document.createElement('div'); hint.style.cssText='font-size:10px;color:var(--txd);margin-top:7px;line-height:1.7';
+    hint.textContent='Check your key is valid and has quota remaining (500 req/mo on free tier).';
     errDiv.appendChild(hdr); errDiv.appendChild(msg); errDiv.appendChild(hint);
-    var pn = document.getElementById('pn-arb');
-    pn.innerHTML = '';
-    pn.appendChild(errDiv);
-    setTab('arb');
+    var pn=document.getElementById('pn-arb'); pn.innerHTML=''; pn.appendChild(errDiv);
   }finally{
-    btn.textContent = '↻ Load Sports List'; btn.disabled = false;
+    btn.textContent='↻ Load Sports List'; btn.disabled=false;
   }
 }
 
 async function fetchOdds(sportKey, mkt){
-  if(!cfg.key){ toast('No Odds API key — open Settings','warn'); return []; }
-  if(!sportKey){ toast('Select a sport from the dropdown first','warn'); return []; }
+  if(!cfg.key||!sportKey) return [];
   try{
-    // fix #7: sportKey URL-encoded; fix #6: regions encoded; key appended by oddsApiUrl()
-    var url = 'https://api.the-odds-api.com/v4/sports/'+encodeURIComponent(sportKey)+'/odds'
+    var url='https://api.the-odds-api.com/v4/sports/'+encodeURIComponent(sportKey)+'/odds'
       +'?regions='+encodeURIComponent(cfg.regions)
       +'&markets='+encodeURIComponent(mkt)
       +'&oddsFormat=american';
-    var data = await oddsApiFetch(url);
-    document.getElementById('sdOdds').className='sd ok';
-    return data;
+    return await oddsApiFetch(url);
   }catch(e){
-    toast('Odds fetch failed: '+e.message, 'err');
     document.getElementById('sdOdds').className='sd err';
     document.getElementById('stOdds').textContent='Error: '+e.message.substring(0,40);
     return [];
   }
 }
 
-function updateQuota(r){
-  var rem  = r.headers.get('x-requests-remaining');
-  var used = r.headers.get('x-requests-used');
-  if(rem !== null){
-    // fix #15: build quota display with DOM, not innerHTML
-    var b = document.getElementById('quotaVal');
-    if(b){
-      b.textContent = rem+' left'+(used?' ('+used+' used)':'');
-    }
-  }
-}
-
-// ── KALSHI ───────────────────────────────────────────────────────────────
-async function kalshiFetch(urlStr){
-  // Try primary URL, then fallback
-  var urls = [
-    urlStr,
-    urlStr.replace('api.elections.kalshi.com', 'trading-api.kalshi.com')
-  ];
-  var lastErr = null;
-  for(var i = 0; i < urls.length; i++){
-    try{
-      var r = await fetch(urls[i], { headers:{ 'Accept':'application/json' } });
-      if(!r.ok) throw new Error('HTTP '+r.status+' from '+urls[i]);
-      var d = await r.json();
-      return d;
-    }catch(e){
-      lastErr = e;
-    }
-  }
-  throw lastErr;
-}
-
-async function fetchKalshi(){
-  var cat = document.getElementById('kCat').value;
-  document.getElementById('sdK').className='sd warn';
-  document.getElementById('stK').textContent='Kalshi: loading…';
-  try{
-    var allMarkets = [];
-    var cursor = '';
-    var page = 0;
-    var maxPages = 20;
-
-    do {
-      var urlObj = new URL('https://api.elections.kalshi.com/trade-api/v2/markets');
-      urlObj.searchParams.set('limit', '1000');
-      urlObj.searchParams.set('status', 'open');
-      if(cat)    urlObj.searchParams.set('category', cat);
-      if(cursor) urlObj.searchParams.set('cursor', cursor);
-
-      var d = await kalshiFetch(urlObj.toString());
-      var page_markets = d.markets || [];
-      allMarkets = allMarkets.concat(page_markets);
-      cursor = d.cursor || '';
-      page++;
-      document.getElementById('stK').textContent = 'Kalshi: loading… ('+allMarkets.length+' markets)';
-    } while(cursor && page_markets.length === 1000 && page < maxPages);
-
-    document.getElementById('sdK').className='sd ok';
-    document.getElementById('stK').textContent='Kalshi: '+allMarkets.length+' markets loaded';
-    return allMarkets;
-  }catch(e){
-    document.getElementById('sdK').className='sd err';
-    document.getElementById('stK').textContent='Kalshi error: '+e.message.substring(0,60);
-    // Show full error in toast so it's visible
-    toast('Kalshi failed: '+e.message, 'err');
-    console.error('Kalshi fetch error:', e);
-    return demoKalshi();
-  }
-}
-
-function demoKalshi(){
-  return [
-    {ticker:'FED-MAY',title:'Fed holds rates steady at May 2025 meeting?',yes_bid:60,yes_ask:62,no_bid:37,no_ask:39,volume_24h:31200,category:'economics',close_time:'2025-05-08T18:00:00Z'},
-    {ticker:'INF-Q2',title:'US CPI below 3% in Q2 2025?',yes_bid:41,yes_ask:44,no_bid:55,no_ask:58,volume_24h:14800,category:'economics',close_time:'2025-07-01T00:00:00Z'},
-    {ticker:'NBA-CELTS',title:'Celtics win 2025 NBA Championship?',yes_bid:21,yes_ask:23,no_bid:76,no_ask:78,volume_24h:9400,category:'sports',close_time:'2025-06-30T00:00:00Z'},
-    {ticker:'BTC-70K',title:'Bitcoin above $70k on May 1 2025?',yes_bid:37,yes_ask:40,no_bid:59,no_ask:62,volume_24h:48000,category:'crypto',close_time:'2025-05-01T00:00:00Z'},
-    {ticker:'SP500-Q2',title:'S&P 500 positive return in Q2 2025?',yes_bid:54,yes_ask:57,no_bid:42,no_ask:44,volume_24h:19700,category:'financials',close_time:'2025-07-01T00:00:00Z'},
-    {ticker:'ARB-DEMO',title:'DEMO: Internal arb example (YES+NO = 98)',yes_bid:43,yes_ask:46,no_bid:49,no_ask:52,volume_24h:420,category:'demo',close_time:'2025-12-31T00:00:00Z'},
-    {ticker:'OIL-50',title:'WTI crude below $50 by June 2025?',yes_bid:28,yes_ask:30,no_bid:69,no_ask:71,volume_24h:7200,category:'economics',close_time:'2025-06-30T00:00:00Z'},
-    {ticker:'NASDAQ-MAY',title:'NASDAQ up more than 5% in May 2025?',yes_bid:32,yes_ask:35,no_bid:64,no_ask:67,volume_24h:11400,category:'financials',close_time:'2025-06-01T00:00:00Z'}
-  ];
-}
-
 // ── ARB FINDER ───────────────────────────────────────────────────────────
 function findArb(events, minPct){
-  var opps = [];
+  var opps=[];
   events.forEach(function(ev){
-    var map = {};
+    var map={};
     (ev.bookmakers||[]).forEach(function(bm){
       (bm.markets||[]).forEach(function(mkt){
         (mkt.outcomes||[]).forEach(function(out){
           if(!map[out.name]) map[out.name]=[];
-          var dec = toDecimal(out.price);
+          var dec=toDecimal(out.price);
           if(dec) map[out.name].push({book:bm.title, am:out.price, dec:dec, imp:1/dec});
         });
       });
     });
-    var names = Object.keys(map);
-    if(names.length < 2) return;
-    var best = {};
-    names.forEach(function(n){
-      best[n] = map[n].reduce(function(a,b){ return b.dec>a.dec?b:a; });
-    });
-    var sumImp = names.reduce(function(s,n){ return s+best[n].imp; }, 0);
-    var pct = (1-sumImp)*100;
-    if(pct > 0 && pct >= minPct){
+    var names=Object.keys(map);
+    if(names.length<2) return;
+    var best={};
+    names.forEach(function(n){ best[n]=map[n].reduce(function(a,b){ return b.dec>a.dec?b:a; }); });
+    var sumImp=names.reduce(function(s,n){ return s+best[n].imp; },0);
+    var pct=(1-sumImp)*100;
+    if(pct>0 && pct>=minPct){
       opps.push({
         type:'arb', event:ev.home_team+' vs '+ev.away_team,
-        sport:ev.sport_key, time:ev.commence_time,
-        pct:pct, sumImp:sumImp,
+        sport:ev.sport_key, time:ev.commence_time, pct:pct, sumImp:sumImp,
         legs:names.map(function(n){
           return {out:n, book:best[n].book, am:best[n].am,
-            dec:best[n].dec, imp:best[n].imp,
-            stake:(best[n].imp/sumImp*100).toFixed(1)};
+            dec:best[n].dec, imp:best[n].imp, stake:(best[n].imp/sumImp*100).toFixed(1)};
         })
       });
     }
@@ -785,98 +553,78 @@ function findArb(events, minPct){
   return opps.sort(function(a,b){ return b.pct-a.pct; });
 }
 
-// ── DEVIG ENGINES ────────────────────────────────────────────────────────
-var SHARP_WEIGHTS = {
+// ── DEVIG ────────────────────────────────────────────────────────────────
+var SHARP_WEIGHTS={
   'Pinnacle':1.00,'Pinnacle Sports':1.00,'Bookmaker':0.85,'Circa Sports':0.85,
   'Betcris':0.70,'Bet365':0.65,'William Hill':0.60,'BetOnline.ag':0.55,
   'Unibet':0.50,'BetMGM':0.30,'DraftKings':0.25,'FanDuel':0.25,
-  'PointsBet':0.25,'Caesars':0.25,'BetRivers':0.20,
-  'Barstool Sportsbook':0.15,'WynnBET':0.15
+  'PointsBet':0.25,'Caesars':0.25,'BetRivers':0.20,'Barstool Sportsbook':0.15,'WynnBET':0.15
 };
-function bookWeight(name){ return SHARP_WEIGHTS[name] || 0.20; }
-function isPinnacle(name){ return name==='Pinnacle'||name==='Pinnacle Sports'; }
-
+function bookWeight(n){ return SHARP_WEIGHTS[n]||0.20; }
+function isPinnacle(n){ return n==='Pinnacle'||n==='Pinnacle Sports'; }
 function devigMultiplicative(rawImps){
-  var total = Object.values(rawImps).reduce(function(s,v){ return s+v; }, 0);
-  var fair = {};
-  Object.keys(rawImps).forEach(function(k){ fair[k] = rawImps[k] / total; });
+  var total=Object.values(rawImps).reduce(function(s,v){ return s+v; },0), fair={};
+  Object.keys(rawImps).forEach(function(k){ fair[k]=rawImps[k]/total; });
   return fair;
 }
-function devigPinnacleFirst(booksByOutcome){
-  var names = Object.keys(booksByOutcome);
-  var hasPinnacleAll = names.every(function(n){
-    return booksByOutcome[n].some(function(b){ return isPinnacle(b.book); });
-  });
-  if(hasPinnacleAll){
-    var rawImps = {};
-    names.forEach(function(n){
-      var pin = booksByOutcome[n].find(function(b){ return isPinnacle(b.book); });
-      rawImps[n] = 1 / pin.dec;
-    });
-    return { fair:devigMultiplicative(rawImps), method:'Pinnacle no-vig', reliable:true };
+function devigPinnacleFirst(bbo){
+  var names=Object.keys(bbo);
+  var hasPinAll=names.every(function(n){ return bbo[n].some(function(b){ return isPinnacle(b.book); }); });
+  if(hasPinAll){
+    var ri={};
+    names.forEach(function(n){ var p=bbo[n].find(function(b){ return isPinnacle(b.book); }); ri[n]=1/p.dec; });
+    return {fair:devigMultiplicative(ri), method:'Pinnacle no-vig', reliable:true};
   }
-  return devigWeighted(booksByOutcome);
+  return devigWeighted(bbo);
 }
-function devigWeighted(booksByOutcome){
-  var names = Object.keys(booksByOutcome);
-  var rawImps = {};
+function devigWeighted(bbo){
+  var names=Object.keys(bbo), ri={};
   names.forEach(function(n){
-    var books = booksByOutcome[n];
-    var totalW = 0, weightedImp = 0;
-    books.forEach(function(b){ var w=bookWeight(b.book); weightedImp+=(1/b.dec)*w; totalW+=w; });
-    rawImps[n] = totalW > 0 ? weightedImp / totalW : (1/books[0].dec);
+    var books=bbo[n], tw=0, wi=0;
+    books.forEach(function(b){ var w=bookWeight(b.book); wi+=(1/b.dec)*w; tw+=w; });
+    ri[n]=tw>0?wi/tw:(1/books[0].dec);
   });
-  var hasSharp = names.some(function(n){
-    return booksByOutcome[n].some(function(b){ return bookWeight(b.book) >= 0.55; });
-  });
-  return { fair:devigMultiplicative(rawImps), method:'Sharp-weighted', reliable:hasSharp };
+  var hasSharp=names.some(function(n){ return bbo[n].some(function(b){ return bookWeight(b.book)>=0.55; }); });
+  return {fair:devigMultiplicative(ri), method:'Sharp-weighted', reliable:hasSharp};
 }
-function devigSimpleAverage(booksByOutcome){
-  var names = Object.keys(booksByOutcome);
-  var rawImps = {};
+function devigSimpleAverage(bbo){
+  var names=Object.keys(bbo), ri={};
   names.forEach(function(n){
-    var books = booksByOutcome[n];
-    rawImps[n] = books.reduce(function(s,b){ return s+(1/b.dec); },0) / books.length;
+    var books=bbo[n]; ri[n]=books.reduce(function(s,b){ return s+(1/b.dec); },0)/books.length;
   });
-  return { fair:devigMultiplicative(rawImps), method:'Simple average', reliable:false };
+  return {fair:devigMultiplicative(ri), method:'Simple average', reliable:false};
 }
 
 // ── +EV FINDER ───────────────────────────────────────────────────────────
 function findEV(events, minPct){
-  var evMethod = (document.getElementById('evMethod')||{value:'pinnacle'}).value || 'pinnacle';
-  var opps = [];
+  var evMethod=(document.getElementById('evMethod')||{value:'pinnacle'}).value||'pinnacle';
+  var opps=[];
   events.forEach(function(ev){
-    var booksByOutcome = {};
+    var bbo={};
     (ev.bookmakers||[]).forEach(function(bm){
       (bm.markets||[]).forEach(function(mkt){
         (mkt.outcomes||[]).forEach(function(out){
-          if(!booksByOutcome[out.name]) booksByOutcome[out.name]=[];
-          var dec = toDecimal(out.price);
-          if(dec) booksByOutcome[out.name].push({book:bm.title, am:out.price, dec:dec});
+          if(!bbo[out.name]) bbo[out.name]=[];
+          var dec=toDecimal(out.price);
+          if(dec) bbo[out.name].push({book:bm.title, am:out.price, dec:dec});
         });
       });
     });
-    var names = Object.keys(booksByOutcome);
-    if(names.length < 2) return;
-    var result;
-    if(evMethod==='pinnacle')      result = devigPinnacleFirst(booksByOutcome);
-    else if(evMethod==='weighted') result = devigWeighted(booksByOutcome);
-    else                           result = devigSimpleAverage(booksByOutcome);
-    var fair = result.fair;
+    var names=Object.keys(bbo);
+    if(names.length<2) return;
+    var result=evMethod==='pinnacle'?devigPinnacleFirst(bbo):evMethod==='weighted'?devigWeighted(bbo):devigSimpleAverage(bbo);
+    var fair=result.fair;
     names.forEach(function(out){
-      var bestO = booksByOutcome[out].reduce(function(a,b){ return b.dec>a.dec?b:a; });
-      var evPct = (fair[out] * bestO.dec - 1) * 100;
-      var kelly = Math.max(0, (fair[out]*bestO.dec-1)/(bestO.dec-1)*100*0.25);
-      if(evPct >= minPct){
+      var bestO=bbo[out].reduce(function(a,b){ return b.dec>a.dec?b:a; });
+      var evPct=(fair[out]*bestO.dec-1)*100;
+      var kelly=Math.max(0,(fair[out]*bestO.dec-1)/(bestO.dec-1)*100*0.25);
+      if(evPct>=minPct){
         opps.push({
-          type:'ev',
-          event:ev.home_team+' vs '+ev.away_team,
-          sport:ev.sport_key, time:ev.commence_time,
+          type:'ev', event:ev.home_team+' vs '+ev.away_team, sport:ev.sport_key, time:ev.commence_time,
           outcome:out, book:bestO.book, am:bestO.am, dec:bestO.dec,
           fairDec:1/fair[out], fairAm:toAmerican(1/fair[out]),
           fairImp:fair[out]*100, bookImp:(1/bestO.dec)*100,
-          ev:evPct, kelly:kelly,
-          devigMethod:result.method, reliable:result.reliable
+          ev:evPct, kelly:kelly, devigMethod:result.method, reliable:result.reliable
         });
       }
     });
@@ -884,193 +632,116 @@ function findEV(events, minPct){
   return opps.sort(function(a,b){ return b.ev-a.ev; });
 }
 
-function processKalshi(raw){
-  return raw.map(function(m){
-    var arbPct = 100 - (m.yes_ask||0) - (m.no_ask||0);
-    // fix #12: use epsilon to avoid float noise false-positives
-    return Object.assign({}, m, {
-      arbPct:arbPct, isArb:arbPct > 0.01,
-      midY:((m.yes_bid||0)+(m.yes_ask||0))/2,
-      midN:((m.no_bid||0)+(m.no_ask||0))/2
-    });
-  });
-}
-
-// ── BATCH FETCH HELPERS ──────────────────────────────────────────────────
+// ── BATCH FETCH ───────────────────────────────────────────────────────────
 async function fetchAllSports(mkt, concurrency){
-  var sportSel = document.getElementById('sportSel').value;
-  var groupFilter = document.getElementById('sportGroup').value;
+  var sportSel=document.getElementById('sportSel').value;
+  var groupFilter=document.getElementById('sportGroup').value;
   var sports;
   if(sportSel==='__all__'||!sportSel){
-    sports = appData.sports.filter(function(s){
-      return !groupFilter || s.group===groupFilter;
-    });
+    sports=appData.sports.filter(function(s){ return !groupFilter||s.group===groupFilter; });
   } else {
-    var found = appData.sports.find(function(s){ return s.key===sportSel; });
-    sports = found ? [found] : [];
+    var found=appData.sports.find(function(s){ return s.key===sportSel; });
+    sports=found?[found]:[];
   }
-  if(sports.length===0){ if(appData.sports.length===0) toast('Load Sports List first','warn'); return []; }
-  var allEvents = [];
-  var done = 0;
-  var total = sports.length;
-  var prog = document.getElementById('scanProgressMsg');
+  if(!sports.length){ if(!appData.sports.length) toast('Load Sports List first','warn'); return []; }
+  var allEvents=[], done=0, prog=document.getElementById('scanProgressMsg');
   for(var i=0; i<sports.length; i+=concurrency){
-    var batch = sports.slice(i, i+concurrency);
-    var batchResults = await Promise.all(batch.map(function(s){
-      return fetchOdds(s.key, mkt).catch(function(){ return []; });
-    }));
-    batchResults.forEach(function(r){ allEvents = allEvents.concat(r); });
-    done += batch.length;
-    prog.textContent = 'Fetching odds: '+done+'/'+total+' sports… ('+allEvents.length+' events)';
-    prog.style.color = 'var(--amb)';
-    await new Promise(function(res){ setTimeout(res, 80); });
+    var batch=sports.slice(i,i+concurrency);
+    var res=await Promise.all(batch.map(function(s){ return fetchOdds(s.key,mkt).catch(function(){ return []; }); }));
+    res.forEach(function(r){ allEvents=allEvents.concat(r); });
+    done+=batch.length;
+    prog.textContent='Fetching: '+done+'/'+sports.length+' sports ('+allEvents.length+' events)';
+    prog.style.color='var(--amb)';
+    await new Promise(function(r){ setTimeout(r,80); });
   }
-  prog.textContent = 'Done — '+allEvents.length+' events across '+done+' sports.';
-  prog.style.color = 'var(--grn)';
+  prog.textContent='Done — '+allEvents.length+' events across '+done+' sports.';
+  prog.style.color='var(--grn)';
   return allEvents;
 }
 
 // ── MAIN SCAN ────────────────────────────────────────────────────────────
 async function runScan(){
   if(scanning) return;
-  var scope  = document.getElementById('scanScope').value; // 'all' | 'odds' | 'kalshi'
-  var mkt    = document.getElementById('mktSel').value;
-  var minEVRaw  = parseFloat(document.getElementById('minEV').value);
-  var minArbRaw = parseFloat(document.getElementById('minArb').value);
-  var minEV  = isNaN(minEVRaw)  ? 3   : minEVRaw;
-  var minA   = isNaN(minArbRaw) ? 0.1 : minArbRaw;
-  var concur = parseInt(document.getElementById('concurrency').value) || 4;
-
-  // Validate requirements per scope
-  var needOdds   = scope === 'all' || scope === 'odds';
-  var needKalshi = scope === 'all' || scope === 'kalshi';
-  if(needOdds && !cfg.key){
-    toast('Set your Odds API key in Settings first','warn'); openSet(); return;
-  }
-  if(needOdds && appData.sports.length===0){
-    toast('Click "Load Sports List" first','warn'); return;
-  }
-
-  scanning = true;
-  oppReg = {}; oppCounter = 0;
-  var btn = document.getElementById('scanBtn');
+  var mkt=document.getElementById('mktSel').value;
+  var minEV=parseFloat(document.getElementById('minEV').value); if(isNaN(minEV)) minEV=3;
+  var minA=parseFloat(document.getElementById('minArb').value); if(isNaN(minA)) minA=0.1;
+  var concur=parseInt(document.getElementById('concurrency').value)||4;
+  if(!cfg.key){ toast('Set Odds API key in Settings first','warn'); openSet(); return; }
+  if(!appData.sports.length){ toast('Click "Load Sports List" first','warn'); return; }
+  scanning=true; oppReg={}; oppCounter=0;
+  var btn=document.getElementById('scanBtn');
   btn.disabled=true; btn.classList.add('loading');
   btn.innerHTML='<span class="spin"></span>Scanning…';
-
   try{
-    var events = [], kRaw = [];
-    if(needOdds && needKalshi){
-      var results = await Promise.all([fetchAllSports(mkt, concur), fetchKalshi()]);
-      events = results[0]; kRaw = results[1];
-    } else if(needOdds){
-      events = await fetchAllSports(mkt, concur);
-    } else {
-      // Kalshi only — jump straight to Kalshi tab
-      kRaw = await fetchKalshi();
-      setTab('kalshi');
-    }
-
-    if(needOdds){
-      appData.arb = findArb(events, minA);
-      appData.ev  = findEV(events, minEV);
-    }
-    if(needKalshi){
-      appData.kalshi = processKalshi(kRaw);
-    }
-
-    renderArb(); renderEV(); renderKalshi();
-    updateStats();
-    document.getElementById('lastScan').textContent = 'Last scan: '+new Date().toLocaleTimeString();
-    var summary = [];
-    if(needOdds)   summary.push(appData.arb.length+' arb · '+appData.ev.length+' +EV');
-    if(needKalshi) summary.push(appData.kalshi.length+' Kalshi markets');
-    toast('Scan done — '+summary.join(' · '), 'ok');
-  }catch(e){ toast('Scan error: '+e.message, 'err'); }
+    var events=await fetchAllSports(mkt,concur);
+    appData.arb=findArb(events,minA);
+    appData.ev=findEV(events,minEV);
+    renderArb(); renderEV();
+    document.getElementById('stArb').textContent=appData.arb.length;
+    document.getElementById('stEV').textContent=appData.ev.length;
+    document.getElementById('tb-arb').textContent=appData.arb.length;
+    document.getElementById('tb-ev').textContent=appData.ev.length;
+    document.getElementById('lastScan').textContent='Last scan: '+new Date().toLocaleTimeString();
+    toast('Scan done — '+appData.arb.length+' arb · '+appData.ev.length+' +EV','ok');
+  }catch(e){ toast('Scan error: '+e.message,'err'); }
   finally{
     scanning=false; btn.disabled=false; btn.classList.remove('loading');
     btn.textContent='▶ SCAN MARKETS';
   }
 }
 
-// ── STATS ────────────────────────────────────────────────────────────────
-function updateStats(){
-  var kArb = appData.kalshi.filter(function(m){ return m.isArb; }).length;
-  document.getElementById('stArb').textContent      = appData.arb.length;
-  document.getElementById('stEV').textContent       = appData.ev.length;
-  // fix #10/#14: use stKalshiArb for the stat counter; stK is the status bar label
-  document.getElementById('stKalshiArb').textContent = kArb;
-  document.getElementById('stMkt').textContent      = appData.kalshi.length;
-  document.getElementById('tb-arb').textContent     = appData.arb.length;
-  document.getElementById('tb-ev').textContent      = appData.ev.length;
-  document.getElementById('tb-kalshi').textContent  = appData.kalshi.length;
-}
-
 // ── RENDER ARB ───────────────────────────────────────────────────────────
 function renderArb(){
-  var pn = document.getElementById('pn-arb');
+  var pn=document.getElementById('pn-arb');
   if(!appData.arb.length){
-    pn.innerHTML = '<div class="empty"><div class="empty-ico">&#9889;</div><div class="empty-t">No arbitrage found</div><div class="empty-s">No guaranteed profit at current threshold. Try a different sport or lower the Min Arb %.</div></div>';
+    pn.innerHTML='<div class="empty"><div class="empty-ico">&#9889;</div><div class="empty-t">No arbitrage found</div><div class="empty-s">No guaranteed profit at current threshold. Try a different sport or lower Min Arb %.</div></div>';
     return;
   }
-  // fix #3: all API-sourced strings escaped via esc() before innerHTML insertion
-  var tbody = document.createElement('tbody');
+  var tbody=document.createElement('tbody');
   appData.arb.forEach(function(o){
-    var legs = o.legs.map(function(l){
-      return '<div class="leg">'
-        +'<span class="lo">'+esc(l.out)+'</span>'
-        +'<span class="ld">'+esc(fmtAm(l.am))+'</span>'
-        +'<span class="lb">'+esc(l.book)+'</span>'
-        +'<span class="lk">'+esc(l.stake)+'%</span>'
-        +'</div>';
+    var legs=o.legs.map(function(l){
+      return '<div class="leg"><span class="lo">'+esc(l.out)+'</span><span class="ld">'+esc(fmtAm(l.am))+'</span><span class="lb">'+esc(l.book)+'</span><span class="lk">'+esc(l.stake)+'%</span></div>';
     }).join('');
-    var tr = document.createElement('tr');
-    tr.style.background = 'rgba(0,232,122,.02)';
-    tr.innerHTML = '<td style="font-size:11px;color:var(--txb);max-width:180px">'+esc(o.event)+'</td>'
+    var tr=document.createElement('tr');
+    tr.style.background='rgba(0,232,122,.02)';
+    tr.innerHTML='<td style="font-size:11px;color:var(--txb);max-width:180px">'+esc(o.event)+'</td>'
       +'<td><span class="badge '+esc(sportColor(o.sport))+'" style="font-size:8px">'+esc(o.sport.split('_')[0].toUpperCase())+'</span></td>'
       +'<td style="color:var(--txd);font-size:10px;white-space:nowrap">'+esc(fmtTime(o.time))+'</td>'
       +'<td><span class="evp">+'+esc(o.pct.toFixed(2))+'%</span></td>'
       +'<td><div class="legs">'+legs+'</div></td>';
     tbody.appendChild(tr);
   });
-  var table = document.createElement('table');
-  table.className = 'dt';
-  table.innerHTML = '<thead><tr><th>Event</th><th>Sport</th><th>Time</th><th>Arb %</th><th>Legs</th></tr></thead>';
-  table.appendChild(tbody);
-  pn.innerHTML = '';
-  pn.appendChild(table);
+  var table=document.createElement('table'); table.className='dt';
+  table.innerHTML='<thead><tr><th>Event</th><th>Sport</th><th>Time</th><th>Arb %</th><th>Legs</th></tr></thead>';
+  table.appendChild(tbody); pn.innerHTML=''; pn.appendChild(table);
 }
 
 // ── RENDER +EV ────────────────────────────────────────────────────────────
 function renderEV(){
-  var pn = document.getElementById('pn-ev');
+  var pn=document.getElementById('pn-ev');
   if(!appData.ev.length){
-    pn.innerHTML = '<div class="empty"><div class="empty-ico">&#128200;</div><div class="empty-t">No +EV bets found</div><div class="empty-s">No edges above threshold. Try lowering the Min EV % or scanning more sports.</div></div>';
+    pn.innerHTML='<div class="empty"><div class="empty-ico">&#128200;</div><div class="empty-t">No +EV bets found</div><div class="empty-s">No edges above threshold. Try lowering Min EV % or scanning more sports.</div></div>';
     return;
   }
-  var method = appData.ev[0] ? appData.ev[0].devigMethod : '—';
-  var unreliable = appData.ev.filter(function(o){ return !o.reliable; }).length;
-
-  // fix #3: build warning bar with DOM, not raw innerHTML
-  var warningBar = document.createElement('div');
-  warningBar.style.marginBottom = '10px';
-  if(unreliable > 0 && method !== 'Pinnacle no-vig'){
-    warningBar.style.cssText = 'margin-bottom:10px;padding:8px 12px;background:var(--amb2);border:1px solid var(--amb);border-radius:6px;font-size:10px;color:var(--amb)';
-    warningBar.textContent = '⚠ '+unreliable+' bet(s) used '+method+' devig — Pinnacle not available for those markets. Lower confidence.';
+  var method=appData.ev[0]?appData.ev[0].devigMethod:'—';
+  var unreliable=appData.ev.filter(function(o){ return !o.reliable; }).length;
+  var bar=document.createElement('div');
+  if(unreliable>0 && method!=='Pinnacle no-vig'){
+    bar.style.cssText='margin-bottom:10px;padding:8px 12px;background:var(--amb2);border:1px solid var(--amb);border-radius:6px;font-size:10px;color:var(--amb)';
+    bar.textContent='⚠ '+unreliable+' bet(s) used '+method+' — lower confidence (no Pinnacle).';
   } else {
-    warningBar.style.cssText = 'margin-bottom:10px;padding:8px 12px;background:var(--grn2);border:1px solid var(--grn);border-radius:6px;font-size:10px;color:var(--grn)';
-    warningBar.textContent = '✓ Devig method: '+method+' — '+appData.ev.length+' edges found';
+    bar.style.cssText='margin-bottom:10px;padding:8px 12px;background:var(--grn2);border:1px solid var(--grn);border-radius:6px;font-size:10px;color:var(--grn)';
+    bar.textContent='✓ Devig: '+method+' — '+appData.ev.length+' edges found';
   }
-
-  var tbody = document.createElement('tbody');
+  var tbody=document.createElement('tbody');
   appData.ev.forEach(function(o){
-    var evB = o.ev>=10?'bg':o.ev>=5?'ba':'bb';
-    var tr = document.createElement('tr');
-    // fix #9: no more broken quote escaping — using DOM construction throughout
-    tr.innerHTML = '<td style="font-size:11px;color:var(--txb);max-width:140px">'+esc(o.event)+'</td>'
+    var evB=o.ev>=10?'bg':o.ev>=5?'ba':'bb';
+    var tr=document.createElement('tr');
+    tr.innerHTML='<td style="font-size:11px;color:var(--txb);max-width:140px">'+esc(o.event)+'</td>'
       +'<td style="font-size:11px">'+esc(o.outcome)
         +(o.reliable
-          ? '<span title="'+esc(o.devigMethod)+'" style="color:var(--grn);font-size:9px;margin-left:3px">&#9679;</span>'
-          : '<span title="Low confidence: '+esc(o.devigMethod)+'" style="color:var(--amb);font-size:9px;margin-left:3px">&#9679;</span>')
+          ?'<span title="'+esc(o.devigMethod)+'" style="color:var(--grn);font-size:9px;margin-left:3px">&#9679;</span>'
+          :'<span title="Low confidence: '+esc(o.devigMethod)+'" style="color:var(--amb);font-size:9px;margin-left:3px">&#9679;</span>')
         +'</td>'
       +'<td><span class="bk">'+esc(o.book)+'</span></td>'
       +'<td style="color:var(--txb);font-weight:600">'+esc(fmtAm(o.am))+'</td>'
@@ -1079,55 +750,9 @@ function renderEV(){
       +'<td style="color:var(--amb);font-size:10px">'+esc(o.kelly.toFixed(1))+'%</td>';
     tbody.appendChild(tr);
   });
-  var table = document.createElement('table');
-  table.className = 'dt';
-  table.innerHTML = '<thead><tr><th>Event</th><th>Outcome</th><th>Book</th><th>Odds</th><th>Fair</th><th>EV %</th><th>&#188; Kelly</th></tr></thead>';
-  table.appendChild(tbody);
-  pn.innerHTML = '';
-  pn.appendChild(warningBar);
-  pn.appendChild(table);
-}
-
-// ── RENDER KALSHI ────────────────────────────────────────────────────────
-function renderKalshi(){
-  var pn = document.getElementById('pn-kalshi');
-  var arbOnly = document.getElementById('kArbOnly').value === 'true';
-  var mkts = appData.kalshi.slice();
-  if(arbOnly) mkts = mkts.filter(function(m){ return m.isArb; });
-  mkts.sort(function(a,b){ return (b.isArb-a.isArb)||((b.volume_24h||0)-(a.volume_24h||0)); });
-  if(!mkts.length){
-    pn.innerHTML = '<div class="empty"><div class="empty-ico">&#127963;</div><div class="empty-t">No markets</div><div class="empty-s">No markets match filter. Try removing arb-only filter.</div></div>';
-    return;
-  }
-  // fix #3: all Kalshi data escaped via esc()
-  var grid = document.createElement('div');
-  grid.className = 'k-grid';
-  mkts.forEach(function(m){
-    var row = document.createElement('div');
-    row.className = 'k-row'+(m.isArb?' arb':'');
-    var arbTag = m.isArb
-      ? '<span class="k-arb-tag">&#9889; '+esc(m.arbPct.toFixed(1))+'&#162; arb</span>'
-      : '';
-    var vol = m.volume_24h ? '$'+(m.volume_24h/1000).toFixed(1)+'k' : '';
-    row.innerHTML =
-      '<div>'
-        +'<div class="k-t">'+esc(m.title||m.ticker)+'</div>'
-        +'<div class="k-m">'
-          +'<span>'+esc(m.category||'—')+'</span>'
-          +(vol?'<span>'+esc(vol)+' vol</span>':'')
-          +'<span>'+esc(fmtTime(m.close_time))+'</span>'
-        +'</div>'
-        +arbTag
-      +'</div>'
-      +'<div class="k-prices">'
-        +'<div class="k-p"><div class="k-pl">YES ask</div><div class="k-pv y">'+esc(m.yes_ask||'—')+'&#162;</div></div>'
-        +'<div class="k-sep">|</div>'
-        +'<div class="k-p"><div class="k-pl">NO ask</div><div class="k-pv n">'+esc(m.no_ask||'—')+'&#162;</div></div>'
-      +'</div>';
-    grid.appendChild(row);
-  });
-  pn.innerHTML = '';
-  pn.appendChild(grid);
+  var table=document.createElement('table'); table.className='dt';
+  table.innerHTML='<thead><tr><th>Event</th><th>Outcome</th><th>Book</th><th>Odds</th><th>Fair</th><th>EV %</th><th>&#188; Kelly</th></tr></thead>';
+  table.appendChild(tbody); pn.innerHTML=''; pn.appendChild(bar); pn.appendChild(table);
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────────
@@ -1135,11 +760,7 @@ function init(){
   loadCfg(); updateStatus();
   document.getElementById('minEV').value  = cfg.minEV;
   document.getElementById('minArb').value = cfg.minArb;
-  onScopeChange(document.getElementById('scanScope').value);
-  document.getElementById('setModal').addEventListener('click', function(e){
-    if(e.target === this) closeSet();
-  });
-  // Key is never auto-loaded — prompt settings on first visit
+  document.getElementById('setModal').addEventListener('click', function(e){ if(e.target===this) closeSet(); });
   if(cfg.key) loadSports();
   else setTimeout(openSet, 700);
 }

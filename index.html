@@ -339,7 +339,7 @@ function esc(str){
 // ── STATE ────────────────────────────────────────────────────────────────
 const cfg = { key:'', regions:'us', minEV:3, minArb:0.1, excludedBooks:[] };
 const appData = { arb:[], ev:[], sports:[] };
-let oppReg = {}, oppCounter = 0, scanning = false, curTab = 'arb';
+let scanning = false, curTab = 'arb';
 
 // ── PERSISTENCE ──────────────────────────────────────────────────────────
 function loadCfg(){
@@ -544,6 +544,13 @@ async function fetchOdds(sportKey, mkt){
 // knownBooks is populated after the first scan from actual API data
 var knownBooks = [];
 
+// Returns true if a book should be included in scanning.
+// Uses the exclusion list directly — does not depend on knownBooks being populated.
+function isBookEnabled(bookTitle){
+  return cfg.excludedBooks.length === 0 || cfg.excludedBooks.indexOf(bookTitle) === -1;
+}
+
+// kept for use by buildBookFilter UI only
 function getEnabledBooks(){
   var excluded = new Set(cfg.excludedBooks);
   return new Set(knownBooks.filter(function(b){ return !excluded.has(b); }));
@@ -605,7 +612,7 @@ function fmtOutcome(name, point){
   var s = esc(name);
   if(point !== undefined && point !== null){
     var sign = point > 0 ? '+' : '';
-    s += ' <span style="color:var(--amb);background:var(--amb2);border:1px solid var(--amb);border-radius:3px;padding:1px 5px;font-size:9px;white-space:nowrap">'+sign+point+'</span>';
+    s += ' <span style="color:var(--amb);background:var(--amb2);border:1px solid var(--amb);border-radius:3px;padding:1px 5px;font-size:9px;white-space:nowrap">'+esc(sign+point)+'</span>';
   }
   return s;
 }
@@ -618,14 +625,11 @@ function marketSig(outcomes){
 }
 
 function findArb(events, minPct){
-  var enabled = getEnabledBooks();
   var opps = [];
   events.forEach(function(ev){
-    // sigMap[sig][outcomeName] = [{book, am, dec, imp, point}]
-    // Each distinct market signature (e.g. "TeamA:-3.5|TeamB:3.5") is a separate line.
     var sigMap = {};
     (ev.bookmakers||[]).forEach(function(bm){
-      if(!enabled.has(bm.title)) return;
+      if(!isBookEnabled(bm.title)) return;
       (bm.markets||[]).forEach(function(mkt){
         var outcomes = mkt.outcomes || [];
         if(!outcomes.length) return;
@@ -708,13 +712,11 @@ function devigSimpleAverage(bbo){
 // ── +EV FINDER ───────────────────────────────────────────────────────────
 function findEV(events, minPct){
   var evMethod=(document.getElementById('evMethod')||{value:'pinnacle'}).value||'pinnacle';
-  var enabled = getEnabledBooks();
   var opps = [];
   events.forEach(function(ev){
-    // Same signature-based grouping as findArb
     var sigMap = {};
     (ev.bookmakers||[]).forEach(function(bm){
-      if(!enabled.has(bm.title)) return;
+      if(!isBookEnabled(bm.title)) return;
       (bm.markets||[]).forEach(function(mkt){
         var outcomes = mkt.outcomes || [];
         if(!outcomes.length) return;
@@ -793,7 +795,7 @@ async function runScan(){
   var concur=parseInt(document.getElementById('concurrency').value)||4;
   if(!cfg.key){ toast('Set Odds API key in Settings first','warn'); openSet(); return; }
   if(!appData.sports.length){ toast('Click "Load Sports List" first','warn'); return; }
-  scanning=true; oppReg={}; oppCounter=0;
+  scanning=true;
   var btn=document.getElementById('scanBtn');
   btn.disabled=true; btn.classList.add('loading');
   btn.innerHTML='<span class="spin"></span>Scanning…';

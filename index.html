@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <!-- CSP: works correctly when served over HTTPS (e.g. GitHub Pages).
      Do not open via file:// — use a local server or deploy to GitHub Pages. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.the-odds-api.com https://api.kalshi.com; img-src 'none'; object-src 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.the-odds-api.com https://api.kalshi.com https://api.elections.kalshi.com; img-src 'none'; object-src 'none';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EdgeFinder — Arb & +EV Scanner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -687,7 +687,7 @@ async function fetchKalshi(){
     var maxPages = 20; // safety cap — 20 × 1000 = up to 20,000 markets
 
     do {
-      var url = new URL('https://api.kalshi.com/trade-api/v2/markets');
+      var url = new URL('https://api.elections.kalshi.com/trade-api/v2/markets');
       url.searchParams.set('limit', '1000');
       url.searchParams.set('status', 'open');
       if(cat)    url.searchParams.set('category', cat);

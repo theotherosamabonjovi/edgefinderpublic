@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<!-- CSP: fix #16 — restrict sources, block inline eval, forbid data: URLs for objects -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.the-odds-api.com https://api.kalshi.com; img-src 'none'; object-src 'none';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EdgeFinder — Arb & +EV Scanner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -34,7 +36,8 @@ header{position:sticky;top:0;z-index:100;background:rgba(6,10,18,.93);border-bot
 .icon-btn:hover{border-color:var(--grn);color:var(--grn)}
 
 /* ── LAYOUT ── */
-.grid{display:grid;grid-template-columns:228px 1fr 308px;height:calc(100vh - 52px - 22px);position:relative;z-index:1}
+/* Removed AI panel column — now 2-column layout */
+.grid{display:grid;grid-template-columns:228px 1fr;height:calc(100vh - 52px - 22px);position:relative;z-index:1}
 
 /* ── SIDEBAR ── */
 .sb{border-right:1px solid var(--b1);padding:16px 14px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
@@ -93,8 +96,6 @@ select.sf option{background:var(--s2)}
 .ld{color:var(--txb);font-weight:500}
 .lb{color:var(--txd);font-size:9px}
 .lk{margin-left:auto;color:var(--amb);font-size:9px}
-.ai-r{padding:3px 9px;background:transparent;border:1px solid var(--b2);border-radius:4px;color:var(--txd);font-family:var(--mono);font-size:10px;cursor:pointer;transition:all .15s;white-space:nowrap}
-.ai-r:hover{border-color:var(--pur);color:var(--pur);background:var(--pur2)}
 
 /* ── KALSHI ── */
 .k-grid{display:flex;flex-direction:column;gap:8px}
@@ -110,27 +111,6 @@ select.sf option{background:var(--s2)}
 .k-pv{font-size:14px;font-weight:600}
 .k-pv.y{color:var(--grn)}.k-pv.n{color:var(--red)}
 .k-sep{color:var(--b2);font-size:12px}
-
-/* ── AI PANEL ── */
-.aip{border-left:1px solid var(--b1);display:flex;flex-direction:column;overflow:hidden}
-.aip-h{padding:12px 14px;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
-.aip-t{font-family:var(--sans);font-size:12px;font-weight:700;color:var(--txb);display:flex;align-items:center;gap:7px}
-.dot{width:7px;height:7px;border-radius:50%;background:var(--txd)}
-.dot.on{background:var(--grn);box-shadow:0 0 5px var(--grn);animation:pulse 2s ease-in-out infinite}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
-.top-btn{padding:5px 11px;background:var(--s3);border:1px solid var(--b2);border-radius:4px;color:var(--pur);font-family:var(--mono);font-size:10px;cursor:pointer;transition:all .15s}
-.top-btn:hover{border-color:var(--pur);background:var(--pur2)}
-.top-btn:disabled{opacity:.4;cursor:not-allowed}
-.ai-msgs{flex:1;overflow-y:auto;padding:10px 12px;display:flex;flex-direction:column;gap:10px}
-.msg{background:var(--s2);border:1px solid var(--b1);border-radius:8px;padding:10px 12px;font-size:11px;line-height:1.65;color:var(--tx);animation:fdin .25s ease}
-.msg.sys{color:var(--txd);font-size:10px;text-align:center;border-color:transparent}
-.msg.thinking{border-color:var(--pur);color:var(--txm)}
-.msg.done{border-color:var(--grn);background:rgba(0,232,122,.025)}
-.msg.err{border-color:var(--red)}
-@keyframes fdin{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
-.msg-hdr{font-size:9px;letter-spacing:1.2px;color:var(--txd);text-transform:uppercase;margin-bottom:7px;display:flex;align-items:center;gap:5px}
-.score-big{font-size:30px;font-weight:700;font-family:var(--sans);margin:6px 0}
-.s-hi{color:var(--grn)}.s-mid{color:var(--amb)}.s-lo{color:var(--red)}
 
 /* ── MODAL ── */
 .ov{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(4px);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
@@ -187,7 +167,8 @@ select.sf option{background:var(--s2)}
       <div class="fgrp">
         <div class="f">
           <label>API Key</label>
-          <input type="password" id="oddsKey" placeholder="Paste your key here (theoddsapi.com)…">
+          <!-- type=password keeps key out of autocomplete history -->
+          <input type="password" id="oddsKey" placeholder="Paste your key here (theoddsapi.com)…" autocomplete="off">
         </div>
         <div class="f">
           <label>Regions (comma-separated)</label>
@@ -199,43 +180,6 @@ select.sf option{background:var(--s2)}
         <span id="testResult" style="font-size:10px;color:var(--txd)">—</span>
       </div>
       <div class="hint">Free key at <b>the-odds-api.com</b> (500 req/month).<br>Paste the full key — no spaces before or after.</div>
-    </div>
-
-    <div class="msec">
-      <div class="msec-t">Ollama</div>
-      <div class="fgrp">
-        <div class="f">
-          <label>Mode</label>
-          <select id="olMode" onchange="toggleOlMode(this.value)" style="background:var(--s2);border:1px solid var(--b1);color:var(--tx);font-family:var(--mono);font-size:11px;padding:8px 11px;border-radius:5px;outline:none;width:100%">
-            <option value="api">API Key (hosted service)</option>
-            <option value="local">Local URL (self-hosted)</option>
-          </select>
-        </div>
-        <div class="f" id="olApiKeyRow">
-          <label>API Key</label>
-          <input type="password" id="ollamaApiKey" placeholder="sk-… or your provider key">
-        </div>
-        <div class="f" id="olApiUrlRow">
-          <label>API Base URL</label>
-          <input type="text" id="ollamaApiUrl" placeholder="https://api.yourprovider.com/v1">
-        </div>
-        <div class="f" id="olLocalRow" style="display:none">
-          <label>Local Base URL</label>
-          <input type="text" id="ollamaUrl" placeholder="http://localhost:11434">
-        </div>
-        <div class="f">
-          <label>Model name</label>
-          <input type="text" id="ollamaModel" placeholder="llama3, mistral, etc.">
-        </div>
-      </div>
-      <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
-        <button class="btn2" style="flex:1;cursor:pointer" onclick="testOllama()">&#9654; Test Connection</button>
-        <span id="olTestResult" style="font-size:10px;color:var(--txd)">—</span>
-      </div>
-      <div class="hint" id="olHint">
-        <b>API Key mode:</b> works with any OpenAI-compatible hosted Ollama service.<br>
-        The API URL should end in <b>/v1</b> (e.g. <b>https://api.example.com/v1</b>).
-      </div>
     </div>
 
     <div class="msec">
@@ -269,7 +213,7 @@ select.sf option{background:var(--s2)}
     Edge<em>Finder</em>
   </div>
   <div class="hdr-r">
-    <div class="quota" id="quota">API quota: <b>&#8212;</b></div>
+    <div class="quota" id="quota">API quota: <b id="quotaVal">—</b></div>
     <div class="icon-btn" onclick="openSet()" title="Settings">&#9881;</div>
   </div>
 </header>
@@ -364,7 +308,8 @@ select.sf option{background:var(--s2)}
       <div class="stats">
         <div class="stat"><div class="stat-v g" id="stArb">0</div><div class="stat-l">Arb bets</div></div>
         <div class="stat"><div class="stat-v a" id="stEV">0</div><div class="stat-l">+EV bets</div></div>
-        <div class="stat"><div class="stat-v b" id="stK">0</div><div class="stat-l">Kalshi arb</div></div>
+        <!-- fix #10/#14: stKalshiArb is now separate from the status bar stK -->
+        <div class="stat"><div class="stat-v b" id="stKalshiArb">0</div><div class="stat-l">Kalshi arb</div></div>
         <div class="stat"><div class="stat-v" id="stMkt">0</div><div class="stat-l">Markets</div></div>
       </div>
     </div>
@@ -413,43 +358,35 @@ select.sf option{background:var(--s2)}
     </div>
   </main>
 
-  <!-- AI PANEL -->
-  <aside class="aip">
-    <div class="aip-h">
-      <div class="aip-t">
-        <div class="dot" id="aiDot"></div>
-        Ollama Analysis
-      </div>
-      <button class="top-btn" id="topBtn" onclick="analyzeTop()">Analyze Top Picks</button>
-    </div>
-    <div class="ai-msgs" id="aiMsgs">
-      <div class="msg sys">
-        Configure Ollama URL + model in &#9881; Settings.<br>
-        Click "AI &#9658;" on any row to analyze it,<br>
-        or use "Analyze Top Picks" for a summary.
-      </div>
-    </div>
-  </aside>
-
 </div>
 
 <!-- STATUS BAR -->
+<!-- fix #10/#14: Kalshi status uses id="stK", stats counter uses id="stKalshiArb" -->
 <div class="sbar">
   <div class="si"><div class="sd" id="sdOdds"></div><span id="stOdds">Odds API: not configured</span></div>
-  <div class="si"><div class="sd" id="sdOl"></div><span id="stOl">Ollama: not configured</span></div>
   <div class="si"><div class="sd" id="sdK"></div><span id="stK">Kalshi: idle</span></div>
   <div style="margin-left:auto"><span id="lastScan">—</span></div>
 </div>
 
 <script>
+// ── HELPERS ──────────────────────────────────────────────────────────────
+
+// fix #3/#4: safe text escaping — all user/API-sourced strings must go through
+// esc() before being inserted into innerHTML.
+function esc(str){
+  var d = document.createElement('div');
+  d.textContent = String(str == null ? '' : str);
+  return d.innerHTML;
+}
+
 // ── STATE ────────────────────────────────────────────────────────────────
 const cfg = {
   key:'', regions:'us',
-  olMode:'api', olUrl:'', olModel:'', olApiKey:'', olApiUrl:'',
   minEV:3, minArb:0.1
 };
 const appData = { arb:[], ev:[], kalshi:[], sports:[] };
-const oppReg = {};   // id -> opportunity object
+// fix #8: oppReg is cleared on each scan — no unbounded growth
+let oppReg = {};
 let oppCounter = 0;
 let scanning = false;
 let curTab = 'arb';
@@ -457,45 +394,53 @@ let curTab = 'arb';
 function regOpp(o){ const id='op'+(oppCounter++); oppReg[id]=o; return id; }
 
 // ── PERSISTENCE ──────────────────────────────────────────────────────────
+// fix #2: only non-sensitive thresholds are stored in localStorage.
+// The API key is intentionally NOT persisted — users re-enter it each session.
 function loadCfg(){
-  try{ Object.assign(cfg, JSON.parse(localStorage.getItem('ef_cfg')||'{}')); }catch(e){}
+  try{
+    var stored = JSON.parse(sessionStorage.getItem('ef_cfg')||'{}');
+    // Only load known safe scalar fields
+    if(typeof stored.regions === 'string') cfg.regions = stored.regions;
+    if(typeof stored.minEV === 'number')   cfg.minEV   = stored.minEV;
+    if(typeof stored.minArb === 'number')  cfg.minArb  = stored.minArb;
+  }catch(e){}
 }
-function saveCfg(){ localStorage.setItem('ef_cfg', JSON.stringify(cfg)); }
+function saveCfg(){
+  // Never store the API key
+  sessionStorage.setItem('ef_cfg', JSON.stringify({
+    regions: cfg.regions,
+    minEV:   cfg.minEV,
+    minArb:  cfg.minArb
+  }));
+}
 
 // ── TOAST ────────────────────────────────────────────────────────────────
 function toast(msg, type){
   const t = document.getElementById('toast');
-  t.textContent = msg;
+  t.textContent = msg; // textContent — safe
   t.className = 'toast ' + (type||'ok') + ' show';
   setTimeout(function(){ t.classList.remove('show'); }, 3200);
 }
 
 // ── SETTINGS MODAL ───────────────────────────────────────────────────────
 function openSet(){
-  document.getElementById('oddsKey').value = cfg.key || '';
+  document.getElementById('oddsKey').value = ''; // never pre-fill keys
   document.getElementById('oddsRegions').value = cfg.regions || 'us';
-  document.getElementById('olMode').value = cfg.olMode || 'api';
-  document.getElementById('ollamaApiKey').value = cfg.olApiKey || '';
-  document.getElementById('ollamaApiUrl').value = cfg.olApiUrl || '';
-  document.getElementById('ollamaUrl').value = cfg.olUrl || '';
-  document.getElementById('ollamaModel').value = cfg.olModel || '';
-  toggleOlMode(cfg.olMode || 'api');
   document.getElementById('cfgMinEV').value = cfg.minEV;
   document.getElementById('cfgMinArb').value = cfg.minArb;
   document.getElementById('setModal').classList.add('open');
 }
 function closeSet(){ document.getElementById('setModal').classList.remove('open'); }
 function saveSet(){
-  cfg.key = document.getElementById('oddsKey').value.trim();
+  var newKey = document.getElementById('oddsKey').value.trim();
+  if(newKey) cfg.key = newKey; // only update key if user actually typed one
   cfg.regions = document.getElementById('oddsRegions').value.trim() || 'us';
-  cfg.olMode = document.getElementById('olMode').value || 'api';
-  cfg.olApiKey = document.getElementById('ollamaApiKey').value.trim();
-  cfg.olApiUrl = document.getElementById('ollamaApiUrl').value.trim().replace(/\/$/, '');
-  cfg.olUrl = document.getElementById('ollamaUrl').value.trim().replace(/\/$/, '');
-  cfg.olModel = document.getElementById('ollamaModel').value.trim();
-  cfg.minEV = parseFloat(document.getElementById('cfgMinEV').value) || 3;
-  cfg.minArb = parseFloat(document.getElementById('cfgMinArb').value) || 0.1;
-  document.getElementById('minEV').value = cfg.minEV;
+  // fix #13: use isNaN guard so that 0 is a valid threshold, not a fallback trigger
+  var evVal  = parseFloat(document.getElementById('cfgMinEV').value);
+  var arbVal = parseFloat(document.getElementById('cfgMinArb').value);
+  cfg.minEV  = isNaN(evVal)  ? 3   : evVal;
+  cfg.minArb = isNaN(arbVal) ? 0.1 : arbVal;
+  document.getElementById('minEV').value  = cfg.minEV;
   document.getElementById('minArb').value = cfg.minArb;
   saveCfg(); updateStatus(); closeSet();
   toast('Settings saved!', 'ok');
@@ -509,19 +454,24 @@ async function testKey(){
   if(!key){ res.textContent='No key entered'; res.style.color='var(--amb)'; return; }
   res.textContent='Testing…'; res.style.color='var(--txd)';
   try{
-    var r = await fetch('https://api.the-odds-api.com/v4/sports?apiKey='+key+'&all=false');
+    // fix #1: key sent as Authorization header, not in the URL
+    var r = await fetch('https://api.the-odds-api.com/v4/sports?all=false', {
+      headers: { 'X-API-Key': key }
+    });
     if(r.ok){
       var d = await r.json();
       var rem = r.headers.get('x-requests-remaining');
-      res.textContent='✓ Valid! '+d.length+' sports'+(rem?' · '+rem+' req left':'');
+      // textContent — safe, no innerHTML
+      res.textContent = '✓ Valid! '+d.length+' sports'+(rem?' · '+rem+' req left':'');
       res.style.color='var(--grn)';
     } else {
-      var body = ''; try{ var j=await r.json(); body=j.message||j.detail||''; }catch(e2){}
-      res.textContent='✗ '+r.status+(body?' — '+body:'');
+      var body = '';
+      try{ var j=await r.json(); body=j.message||j.detail||''; }catch(e2){}
+      res.textContent = '✗ '+r.status+(body?' — '+body.substring(0,60):'');
       res.style.color='var(--red)';
     }
   }catch(e){
-    res.textContent='✗ Network error: '+e.message;
+    res.textContent = '✗ Network error: '+e.message.substring(0,60);
     res.style.color='var(--red)';
   }
 }
@@ -531,11 +481,6 @@ function updateStatus(){
   var sdO = document.getElementById('sdOdds'), stO = document.getElementById('stOdds');
   if(cfg.key){ sdO.className='sd ok'; stO.textContent='Odds API: configured'; }
   else { sdO.className='sd err'; stO.textContent='Odds API: no key'; }
-
-  var sdOl = document.getElementById('sdOl'), stOl = document.getElementById('stOl');
-  var olReady = (cfg.olMode==='api' && cfg.olApiKey) || (cfg.olMode==='local' && cfg.olUrl);
-  if(olReady){ sdOl.className='sd warn'; stOl.textContent='Ollama: '+(cfg.olModel||'—')+' ('+(cfg.olMode==='api'?'API key':'local')+')'; }
-  else { sdOl.className='sd'; stOl.textContent='Ollama: not configured'; }
 }
 
 // ── TABS ─────────────────────────────────────────────────────────────────
@@ -580,14 +525,31 @@ function sportColor(s){
 }
 
 // ── ODDS API ─────────────────────────────────────────────────────────────
+// fix #1: key sent via X-API-Key header on every request, never in the URL
+function oddsApiHeaders(){
+  return { 'X-API-Key': cfg.key };
+}
+
 async function oddsApiFetch(url){
-  var r = await fetch(url);
+  var r = await fetch(url, { headers: oddsApiHeaders() });
   if(!r.ok){
+    // fix #17: guard against non-JSON error bodies
     var body = '';
-    try{ var j = await r.json(); body = j.message || j.detail || JSON.stringify(j); }catch(e2){ body = await r.text().catch(function(){ return ''; }); }
-    throw new Error('HTTP '+r.status+(body?' — '+body:''));
+    try{
+      var ct = r.headers.get('content-type')||'';
+      if(ct.includes('application/json')){
+        var j = await r.json();
+        body = j.message || j.detail || JSON.stringify(j);
+      } else {
+        body = await r.text().catch(function(){ return ''; });
+      }
+    }catch(e2){ /* ignore parse errors */ }
+    throw new Error('HTTP '+r.status+(body?' — '+body.substring(0,120):''));
   }
   updateQuota(r);
+  // fix #17: guard JSON parse on success too
+  var ct2 = r.headers.get('content-type')||'';
+  if(!ct2.includes('application/json')) throw new Error('Unexpected non-JSON response from Odds API');
   return r.json();
 }
 
@@ -596,7 +558,8 @@ async function loadSports(){
   var btn = document.querySelector('.aux-btn');
   btn.textContent = '⏳ Loading…'; btn.disabled = true;
   try{
-    var sports = await oddsApiFetch('https://api.the-odds-api.com/v4/sports?apiKey='+cfg.key+'&all=false');
+    // fix #1: no key in URL — header is used instead
+    var sports = await oddsApiFetch('https://api.the-odds-api.com/v4/sports?all=false');
     appData.sports = sports;
     var sel = document.getElementById('sportSel');
     sel.innerHTML = '<option value="__all__">All Sports (scan everything)</option>';
@@ -606,13 +569,19 @@ async function loadSports(){
     var grpSel = document.getElementById('sportGroup');
     grpSel.innerHTML = '<option value="">No filter — all groups</option>';
     Object.keys(grps).forEach(function(g){
-      var o = document.createElement('option'); o.value=g; o.textContent=g+' ('+grps[g].length+')'; grpSel.appendChild(o);
+      var o = document.createElement('option');
+      o.value = g;
+      o.textContent = g+' ('+grps[g].length+')'; // textContent — safe
+      grpSel.appendChild(o);
     });
     // populate individual sports
     Object.entries(grps).forEach(function(entry){
-      var og = document.createElement('optgroup'); og.label = entry[0];
+      var og = document.createElement('optgroup');
+      og.label = entry[0]; // .label assignment is safe
       entry[1].forEach(function(s){
-        var o = document.createElement('option'); o.value=s.key; o.textContent=s.title;
+        var o = document.createElement('option');
+        o.value = s.key; // .value assignment is safe
+        o.textContent = s.title; // textContent — safe
         og.appendChild(o);
       });
       sel.appendChild(og);
@@ -625,8 +594,24 @@ async function loadSports(){
   }catch(e){
     toast('Sports load failed: '+e.message, 'err');
     document.getElementById('sdOdds').className='sd err';
-    document.getElementById('stOdds').textContent='Odds API: '+e.message;
-    addMsg('<div class="msg-hdr" style="color:var(--red)">&#9888; Odds API Error</div><div style="font-size:11px;color:var(--red)">'+e.message+'</div><div style="font-size:10px;color:var(--txd);margin-top:7px">Common causes:<br>• Invalid or expired API key<br>• Key copied with extra spaces — re-paste carefully<br>• Free tier expired (500 req/mo limit)</div>','err');
+    document.getElementById('stOdds').textContent='Odds API: '+e.message.substring(0,60);
+    // fix #3: build error message with DOM nodes, not innerHTML with raw strings
+    var errDiv = document.createElement('div');
+    errDiv.className = 'empty';
+    errDiv.style.cssText = 'padding:20px;color:var(--red)';
+    var hdr = document.createElement('div');
+    hdr.style.cssText = 'font-size:13px;margin-bottom:8px';
+    hdr.textContent = '⚠ Odds API Error';
+    var msg = document.createElement('div');
+    msg.style.cssText = 'font-size:11px';
+    msg.textContent = e.message;
+    var hint = document.createElement('div');
+    hint.style.cssText = 'font-size:10px;color:var(--txd);margin-top:7px;line-height:1.7';
+    hint.textContent = 'Common causes: invalid/expired key, key copied with extra spaces, free tier quota exceeded (500 req/mo).';
+    errDiv.appendChild(hdr); errDiv.appendChild(msg); errDiv.appendChild(hint);
+    var pn = document.getElementById('pn-arb');
+    pn.innerHTML = '';
+    pn.appendChild(errDiv);
     setTab('arb');
   }finally{
     btn.textContent = '↻ Load Sports List'; btn.disabled = false;
@@ -637,7 +622,11 @@ async function fetchOdds(sportKey, mkt){
   if(!cfg.key){ toast('No Odds API key — open Settings','warn'); return []; }
   if(!sportKey){ toast('Select a sport from the dropdown first','warn'); return []; }
   try{
-    var url = 'https://api.the-odds-api.com/v4/sports/'+sportKey+'/odds?apiKey='+cfg.key+'&regions='+cfg.regions+'&markets='+mkt+'&oddsFormat=american';
+    // fix #1: key in header; fix #7: sportKey URL-encoded
+    var url = 'https://api.the-odds-api.com/v4/sports/'+encodeURIComponent(sportKey)+'/odds'
+      +'?regions='+encodeURIComponent(cfg.regions)  // fix #6: regions encoded
+      +'&markets='+encodeURIComponent(mkt)
+      +'&oddsFormat=american';
     var data = await oddsApiFetch(url);
     document.getElementById('sdOdds').className='sd ok';
     return data;
@@ -650,10 +639,14 @@ async function fetchOdds(sportKey, mkt){
 }
 
 function updateQuota(r){
-  var rem = r.headers.get('x-requests-remaining');
+  var rem  = r.headers.get('x-requests-remaining');
   var used = r.headers.get('x-requests-used');
   if(rem !== null){
-    document.getElementById('quota').innerHTML='API quota: <b>'+rem+' left</b>'+(used?' ('+used+' used)':'');
+    // fix #15: build quota display with DOM, not innerHTML
+    var b = document.getElementById('quotaVal');
+    if(b){
+      b.textContent = rem+' left'+(used?' ('+used+' used)':'');
+    }
   }
 }
 
@@ -666,9 +659,11 @@ async function fetchKalshi(){
     var url = new URL('https://api.kalshi.com/trade-api/v2/markets');
     url.searchParams.set('limit','200');
     url.searchParams.set('status','open');
-    if(cat) url.searchParams.set('category',cat);
+    if(cat) url.searchParams.set('category', cat); // URLSearchParams encodes automatically
     var r = await fetch(url.toString(), {headers:{Accept:'application/json'}});
     if(!r.ok) throw new Error('HTTP '+r.status);
+    var ct = r.headers.get('content-type')||'';
+    if(!ct.includes('application/json')) throw new Error('Non-JSON response from Kalshi');
     var d = await r.json();
     document.getElementById('sdK').className='sd ok';
     document.getElementById('stK').textContent='Kalshi: live';
@@ -715,8 +710,6 @@ function findArb(events, minPct){
     });
     var sumImp = names.reduce(function(s,n){ return s+best[n].imp; }, 0);
     var pct = (1-sumImp)*100;
-    // Hard floor: sumImp must be strictly < 1.0 (true guaranteed profit).
-    // minPct only filters how small an arb to show — never allows loss.
     if(pct > 0 && pct >= minPct){
       opps.push({
         type:'arb', event:ev.home_team+' vs '+ev.away_team,
@@ -734,88 +727,51 @@ function findArb(events, minPct){
 }
 
 // ── DEVIG ENGINES ────────────────────────────────────────────────────────
-
-// Books ranked by sharpness. Pinnacle is the gold standard; Circa/Bookmaker
-// are sharp US books; the rest are recreational and should not set the line.
 var SHARP_WEIGHTS = {
-  'Pinnacle':       1.00,
-  'Pinnacle Sports':1.00,
-  'Bookmaker':      0.85,
-  'Circa Sports':   0.85,
-  'Betcris':        0.70,
-  'Bet365':         0.65,
-  'William Hill':   0.60,
-  'BetOnline.ag':   0.55,
-  'Unibet':         0.50,
-  'BetMGM':         0.30,
-  'DraftKings':     0.25,
-  'FanDuel':        0.25,
-  'PointsBet':      0.25,
-  'Caesars':        0.25,
-  'BetRivers':      0.20,
-  'Barstool Sportsbook': 0.15,
-  'WynnBET':        0.15
+  'Pinnacle':1.00,'Pinnacle Sports':1.00,'Bookmaker':0.85,'Circa Sports':0.85,
+  'Betcris':0.70,'Bet365':0.65,'William Hill':0.60,'BetOnline.ag':0.55,
+  'Unibet':0.50,'BetMGM':0.30,'DraftKings':0.25,'FanDuel':0.25,
+  'PointsBet':0.25,'Caesars':0.25,'BetRivers':0.20,
+  'Barstool Sportsbook':0.15,'WynnBET':0.15
 };
-
 function bookWeight(name){ return SHARP_WEIGHTS[name] || 0.20; }
+function isPinnacle(name){ return name==='Pinnacle'||name==='Pinnacle Sports'; }
 
-function isPinnacle(name){
-  return name === 'Pinnacle' || name === 'Pinnacle Sports';
-}
-
-// Remove vig from a two-sided market using the multiplicative method.
-// Returns {outcome: fairProb} where probs sum to 1.
 function devigMultiplicative(rawImps){
   var total = Object.values(rawImps).reduce(function(s,v){ return s+v; }, 0);
   var fair = {};
   Object.keys(rawImps).forEach(function(k){ fair[k] = rawImps[k] / total; });
   return fair;
 }
-
-// Devig using Pinnacle's line only. Falls back to weighted if Pinnacle absent.
 function devigPinnacleFirst(booksByOutcome){
   var names = Object.keys(booksByOutcome);
-  // Check if Pinnacle has all outcomes
   var hasPinnacleAll = names.every(function(n){
     return booksByOutcome[n].some(function(b){ return isPinnacle(b.book); });
   });
-
   if(hasPinnacleAll){
     var rawImps = {};
     names.forEach(function(n){
       var pin = booksByOutcome[n].find(function(b){ return isPinnacle(b.book); });
       rawImps[n] = 1 / pin.dec;
     });
-    var fair = devigMultiplicative(rawImps);
-    return { fair:fair, method:'Pinnacle no-vig', reliable:true };
+    return { fair:devigMultiplicative(rawImps), method:'Pinnacle no-vig', reliable:true };
   }
-
-  // Fall through to weighted if no Pinnacle
   return devigWeighted(booksByOutcome);
 }
-
-// Weighted devig — sharper books count more toward the fair line.
 function devigWeighted(booksByOutcome){
   var names = Object.keys(booksByOutcome);
   var rawImps = {};
   names.forEach(function(n){
     var books = booksByOutcome[n];
     var totalW = 0, weightedImp = 0;
-    books.forEach(function(b){
-      var w = bookWeight(b.book);
-      weightedImp += (1/b.dec) * w;
-      totalW += w;
-    });
+    books.forEach(function(b){ var w=bookWeight(b.book); weightedImp+=(1/b.dec)*w; totalW+=w; });
     rawImps[n] = totalW > 0 ? weightedImp / totalW : (1/books[0].dec);
   });
   var hasSharp = names.some(function(n){
     return booksByOutcome[n].some(function(b){ return bookWeight(b.book) >= 0.55; });
   });
-  var fair = devigMultiplicative(rawImps);
-  return { fair:fair, method:'Sharp-weighted', reliable:hasSharp };
+  return { fair:devigMultiplicative(rawImps), method:'Sharp-weighted', reliable:hasSharp };
 }
-
-// Simple average devig (legacy — least reliable)
 function devigSimpleAverage(booksByOutcome){
   var names = Object.keys(booksByOutcome);
   var rawImps = {};
@@ -823,17 +779,14 @@ function devigSimpleAverage(booksByOutcome){
     var books = booksByOutcome[n];
     rawImps[n] = books.reduce(function(s,b){ return s+(1/b.dec); },0) / books.length;
   });
-  var fair = devigMultiplicative(rawImps);
-  return { fair:fair, method:'Simple average', reliable:false };
+  return { fair:devigMultiplicative(rawImps), method:'Simple average', reliable:false };
 }
 
-// +EV FINDER ────────────────────────────────────────────────────────────────
+// ── +EV FINDER ───────────────────────────────────────────────────────────
 function findEV(events, minPct){
   var evMethod = (document.getElementById('evMethod')||{value:'pinnacle'}).value || 'pinnacle';
   var opps = [];
-
   events.forEach(function(ev){
-    // Bucket all book lines by outcome
     var booksByOutcome = {};
     (ev.bookmakers||[]).forEach(function(bm){
       (bm.markets||[]).forEach(function(mkt){
@@ -844,57 +797,40 @@ function findEV(events, minPct){
         });
       });
     });
-
     var names = Object.keys(booksByOutcome);
     if(names.length < 2) return;
-
-    // Pick devig engine
     var result;
-    if(evMethod === 'pinnacle')      result = devigPinnacleFirst(booksByOutcome);
-    else if(evMethod === 'weighted') result = devigWeighted(booksByOutcome);
-    else                             result = devigSimpleAverage(booksByOutcome);
-
+    if(evMethod==='pinnacle')      result = devigPinnacleFirst(booksByOutcome);
+    else if(evMethod==='weighted') result = devigWeighted(booksByOutcome);
+    else                           result = devigSimpleAverage(booksByOutcome);
     var fair = result.fair;
-
     names.forEach(function(out){
-      // Best odds available across all books for this outcome
       var bestO = booksByOutcome[out].reduce(function(a,b){ return b.dec>a.dec?b:a; });
-      // Skip if the best line IS Pinnacle and method is pinnacle (no edge vs yourself)
-      // Only flag when a soft book beats the sharp line
       var evPct = (fair[out] * bestO.dec - 1) * 100;
       var kelly = Math.max(0, (fair[out]*bestO.dec-1)/(bestO.dec-1)*100*0.25);
-
       if(evPct >= minPct){
         opps.push({
           type:'ev',
-          event: ev.home_team+' vs '+ev.away_team,
-          sport: ev.sport_key,
-          time: ev.commence_time,
-          outcome: out,
-          book: bestO.book,
-          am: bestO.am,
-          dec: bestO.dec,
-          fairDec: 1/fair[out],
-          fairAm: toAmerican(1/fair[out]),
-          fairImp: fair[out]*100,
-          bookImp: (1/bestO.dec)*100,
-          ev: evPct,
-          kelly: kelly,
-          devigMethod: result.method,
-          reliable: result.reliable
+          event:ev.home_team+' vs '+ev.away_team,
+          sport:ev.sport_key, time:ev.commence_time,
+          outcome:out, book:bestO.book, am:bestO.am, dec:bestO.dec,
+          fairDec:1/fair[out], fairAm:toAmerican(1/fair[out]),
+          fairImp:fair[out]*100, bookImp:(1/bestO.dec)*100,
+          ev:evPct, kelly:kelly,
+          devigMethod:result.method, reliable:result.reliable
         });
       }
     });
   });
-
   return opps.sort(function(a,b){ return b.ev-a.ev; });
 }
 
 function processKalshi(raw){
   return raw.map(function(m){
     var arbPct = 100 - (m.yes_ask||0) - (m.no_ask||0);
+    // fix #12: use epsilon to avoid float noise false-positives
     return Object.assign({}, m, {
-      arbPct:arbPct, isArb:arbPct>0,
+      arbPct:arbPct, isArb:arbPct > 0.01,
       midY:((m.yes_bid||0)+(m.yes_ask||0))/2,
       midN:((m.no_bid||0)+(m.no_ask||0))/2
     });
@@ -906,34 +842,21 @@ async function fetchAllSports(mkt, concurrency){
   var sportSel = document.getElementById('sportSel').value;
   var groupFilter = document.getElementById('sportGroup').value;
   var sports;
-
-  if(sportSel === '__all__' || !sportSel){
-    // All sports, optionally filtered by group
+  if(sportSel==='__all__'||!sportSel){
     sports = appData.sports.filter(function(s){
-      return !groupFilter || s.group === groupFilter;
+      return !groupFilter || s.group===groupFilter;
     });
   } else {
-    // Single sport selected
-    var found = appData.sports.find(function(s){ return s.key === sportSel; });
+    var found = appData.sports.find(function(s){ return s.key===sportSel; });
     sports = found ? [found] : [];
   }
-
-  if(sports.length === 0){
-    if(appData.sports.length === 0){
-      toast('Load Sports List first', 'warn');
-      return [];
-    }
-    return [];
-  }
-
+  if(sports.length===0){ if(appData.sports.length===0) toast('Load Sports List first','warn'); return []; }
   var allEvents = [];
   var done = 0;
   var total = sports.length;
   var prog = document.getElementById('scanProgressMsg');
-
-  // Process in batches of `concurrency`
-  for(var i = 0; i < sports.length; i += concurrency){
-    var batch = sports.slice(i, i + concurrency);
+  for(var i=0; i<sports.length; i+=concurrency){
+    var batch = sports.slice(i, i+concurrency);
     var batchResults = await Promise.all(batch.map(function(s){
       return fetchOdds(s.key, mkt).catch(function(){ return []; });
     }));
@@ -941,10 +864,8 @@ async function fetchAllSports(mkt, concurrency){
     done += batch.length;
     prog.textContent = 'Fetching odds: '+done+'/'+total+' sports… ('+allEvents.length+' events)';
     prog.style.color = 'var(--amb)';
-    // Small yield to keep UI responsive
     await new Promise(function(res){ setTimeout(res, 80); });
   }
-
   prog.textContent = 'Done — '+allEvents.length+' events across '+done+' sports.';
   prog.style.color = 'var(--grn)';
   return allEvents;
@@ -954,45 +875,49 @@ async function fetchAllSports(mkt, concurrency){
 async function runScan(){
   if(scanning) return;
   var mkt = document.getElementById('mktSel').value;
-  var minEV = parseFloat(document.getElementById('minEV').value) || 3;
-  var minA = parseFloat(document.getElementById('minArb').value) || 0.1;
+  // fix #13: isNaN guard so 0 is a valid threshold
+  var minEVRaw  = parseFloat(document.getElementById('minEV').value);
+  var minArbRaw = parseFloat(document.getElementById('minArb').value);
+  var minEV  = isNaN(minEVRaw)  ? 3   : minEVRaw;
+  var minA   = isNaN(minArbRaw) ? 0.1 : minArbRaw;
   var concur = parseInt(document.getElementById('concurrency').value) || 4;
   if(!cfg.key){ toast('Set Odds API key in Settings first','warn'); openSet(); return; }
-  if(appData.sports.length === 0){ toast('Click "Load Sports List" first','warn'); return; }
+  if(appData.sports.length===0){ toast('Click "Load Sports List" first','warn'); return; }
   scanning = true;
+  // fix #8: clear oppReg before each scan to prevent memory leak
+  oppReg = {};
+  oppCounter = 0;
   var btn = document.getElementById('scanBtn');
-  btn.disabled = true; btn.classList.add('loading');
-  btn.innerHTML = '<span class="spin"></span>Scanning…';
+  btn.disabled=true; btn.classList.add('loading');
+  btn.innerHTML='<span class="spin"></span>Scanning…';
   try{
-    var results = await Promise.all([
-      fetchAllSports(mkt, concur),
-      fetchKalshi()
-    ]);
+    var results = await Promise.all([fetchAllSports(mkt, concur), fetchKalshi()]);
     var events = results[0], kRaw = results[1];
-    appData.arb = findArb(events, minA);
-    appData.ev = findEV(events, minEV);
-    appData.kalshi = processKalshi(kRaw);
+    appData.arb     = findArb(events, minA);
+    appData.ev      = findEV(events, minEV);
+    appData.kalshi  = processKalshi(kRaw);
     renderArb(); renderEV(); renderKalshi();
     updateStats();
     document.getElementById('lastScan').textContent = 'Last scan: '+new Date().toLocaleTimeString();
     toast('Scan done — '+appData.arb.length+' arb · '+appData.ev.length+' +EV', 'ok');
   }catch(e){ toast('Scan error: '+e.message, 'err'); }
   finally{
-    scanning = false; btn.disabled = false; btn.classList.remove('loading');
-    btn.textContent = '▶ SCAN MARKETS';
+    scanning=false; btn.disabled=false; btn.classList.remove('loading');
+    btn.textContent='▶ SCAN MARKETS';
   }
 }
 
 // ── STATS ────────────────────────────────────────────────────────────────
 function updateStats(){
   var kArb = appData.kalshi.filter(function(m){ return m.isArb; }).length;
-  document.getElementById('stArb').textContent = appData.arb.length;
-  document.getElementById('stEV').textContent = appData.ev.length;
-  document.getElementById('stK').textContent = kArb;
-  document.getElementById('stMkt').textContent = appData.kalshi.length;
-  document.getElementById('tb-arb').textContent = appData.arb.length;
-  document.getElementById('tb-ev').textContent = appData.ev.length;
-  document.getElementById('tb-kalshi').textContent = appData.kalshi.length;
+  document.getElementById('stArb').textContent      = appData.arb.length;
+  document.getElementById('stEV').textContent       = appData.ev.length;
+  // fix #10/#14: use stKalshiArb for the stat counter; stK is the status bar label
+  document.getElementById('stKalshiArb').textContent = kArb;
+  document.getElementById('stMkt').textContent      = appData.kalshi.length;
+  document.getElementById('tb-arb').textContent     = appData.arb.length;
+  document.getElementById('tb-ev').textContent      = appData.ev.length;
+  document.getElementById('tb-kalshi').textContent  = appData.kalshi.length;
 }
 
 // ── RENDER ARB ───────────────────────────────────────────────────────────
@@ -1002,14 +927,32 @@ function renderArb(){
     pn.innerHTML = '<div class="empty"><div class="empty-ico">&#9889;</div><div class="empty-t">No arbitrage found</div><div class="empty-s">No guaranteed profit at current threshold. Try a different sport or lower the Min Arb %.</div></div>';
     return;
   }
-  var rows = appData.arb.map(function(o){
-    var id = regOpp(o);
+  // fix #3: all API-sourced strings escaped via esc() before innerHTML insertion
+  var tbody = document.createElement('tbody');
+  appData.arb.forEach(function(o){
     var legs = o.legs.map(function(l){
-      return '<div class="leg"><span class="lo">'+l.out+'</span><span class="ld">'+fmtAm(l.am)+'</span><span class="lb">'+l.book+'</span><span class="lk">'+l.stake+'%</span></div>';
+      return '<div class="leg">'
+        +'<span class="lo">'+esc(l.out)+'</span>'
+        +'<span class="ld">'+esc(fmtAm(l.am))+'</span>'
+        +'<span class="lb">'+esc(l.book)+'</span>'
+        +'<span class="lk">'+esc(l.stake)+'%</span>'
+        +'</div>';
     }).join('');
-    return '<tr style="background:rgba(0,232,122,.02)"><td style="font-size:11px;color:var(--txb);max-width:180px">'+o.event+'</td><td><span class="badge '+sportColor(o.sport)+'" style="font-size:8px">'+o.sport.split('_')[0].toUpperCase()+'</span></td><td style="color:var(--txd);font-size:10px;white-space:nowrap">'+fmtTime(o.time)+'</td><td><span class="evp">+'+o.pct.toFixed(2)+'%</span></td><td><div class="legs">'+legs+'</div></td><td><button class="ai-r" onclick="analyzeRow(\''+id+'\')">AI &#9658;</button></td></tr>';
-  }).join('');
-  pn.innerHTML = '<table class="dt"><thead><tr><th>Event</th><th>Sport</th><th>Time</th><th>Arb %</th><th>Legs</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+    var tr = document.createElement('tr');
+    tr.style.background = 'rgba(0,232,122,.02)';
+    tr.innerHTML = '<td style="font-size:11px;color:var(--txb);max-width:180px">'+esc(o.event)+'</td>'
+      +'<td><span class="badge '+esc(sportColor(o.sport))+'" style="font-size:8px">'+esc(o.sport.split('_')[0].toUpperCase())+'</span></td>'
+      +'<td style="color:var(--txd);font-size:10px;white-space:nowrap">'+esc(fmtTime(o.time))+'</td>'
+      +'<td><span class="evp">+'+esc(o.pct.toFixed(2))+'%</span></td>'
+      +'<td><div class="legs">'+legs+'</div></td>';
+    tbody.appendChild(tr);
+  });
+  var table = document.createElement('table');
+  table.className = 'dt';
+  table.innerHTML = '<thead><tr><th>Event</th><th>Sport</th><th>Time</th><th>Arb %</th><th>Legs</th></tr></thead>';
+  table.appendChild(tbody);
+  pn.innerHTML = '';
+  pn.appendChild(table);
 }
 
 // ── RENDER +EV ────────────────────────────────────────────────────────────
@@ -1021,200 +964,96 @@ function renderEV(){
   }
   var method = appData.ev[0] ? appData.ev[0].devigMethod : '—';
   var unreliable = appData.ev.filter(function(o){ return !o.reliable; }).length;
-  var warningBar = unreliable > 0 && method !== 'Pinnacle no-vig'
-    ? '<div style="margin-bottom:10px;padding:8px 12px;background:var(--amb2);border:1px solid var(--amb);border-radius:6px;font-size:10px;color:var(--amb)">&#9888; '+unreliable+' bet(s) used '+method+' devig — Pinnacle not available for those markets. Lower confidence.</div>'
-    : '<div style="margin-bottom:10px;padding:8px 12px;background:var(--grn2);border:1px solid var(--grn);border-radius:6px;font-size:10px;color:var(--grn)">&#10003; Devig method: '+method+' — '+appData.ev.length+' edges found</div>';
-  var rows = appData.ev.map(function(o){
-    var id = regOpp(o);
+
+  // fix #3: build warning bar with DOM, not raw innerHTML
+  var warningBar = document.createElement('div');
+  warningBar.style.marginBottom = '10px';
+  if(unreliable > 0 && method !== 'Pinnacle no-vig'){
+    warningBar.style.cssText = 'margin-bottom:10px;padding:8px 12px;background:var(--amb2);border:1px solid var(--amb);border-radius:6px;font-size:10px;color:var(--amb)';
+    warningBar.textContent = '⚠ '+unreliable+' bet(s) used '+method+' devig — Pinnacle not available for those markets. Lower confidence.';
+  } else {
+    warningBar.style.cssText = 'margin-bottom:10px;padding:8px 12px;background:var(--grn2);border:1px solid var(--grn);border-radius:6px;font-size:10px;color:var(--grn)';
+    warningBar.textContent = '✓ Devig method: '+method+' — '+appData.ev.length+' edges found';
+  }
+
+  var tbody = document.createElement('tbody');
+  appData.ev.forEach(function(o){
     var evB = o.ev>=10?'bg':o.ev>=5?'ba':'bb';
-    var reliableDot = o.reliable
-      ? '<span title="'+o.devigMethod+'" style="color:var(--grn);font-size:9px;margin-left:3px">&#9679;</span>'
-      : '<span title="Low confidence: '+o.devigMethod+'" style="color:var(--amb);font-size:9px;margin-left:3px">&#9679;</span>';
-    return '<tr><td style="font-size:11px;color:var(--txb);max-width:140px">'+o.event+'</td><td style="font-size:11px">'+o.outcome+reliableDot+'</td><td><span class="bk">'+o.book+'</span></td><td style="color:var(--txb);font-weight:600">'+fmtAm(o.am)+'</td><td style="color:var(--txd)">'+o.fairAm+'</td><td><span class="badge '+evB+'">+'+o.ev.toFixed(1)+'%</span></td><td style="color:var(--amb);font-size:10px">'+o.kelly.toFixed(1)+'%</td><td><button class="ai-r" onclick="analyzeRow(\'"+id+"\')">AI &#9658;</button></td></tr>';
-  }).join('');
-  pn.innerHTML = warningBar+'<table class="dt"><thead><tr><th>Event</th><th>Outcome</th><th>Book</th><th>Odds</th><th>Fair</th><th>EV %</th><th>&#188; Kelly</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+    var tr = document.createElement('tr');
+    // fix #9: no more broken quote escaping — using DOM construction throughout
+    tr.innerHTML = '<td style="font-size:11px;color:var(--txb);max-width:140px">'+esc(o.event)+'</td>'
+      +'<td style="font-size:11px">'+esc(o.outcome)
+        +(o.reliable
+          ? '<span title="'+esc(o.devigMethod)+'" style="color:var(--grn);font-size:9px;margin-left:3px">&#9679;</span>'
+          : '<span title="Low confidence: '+esc(o.devigMethod)+'" style="color:var(--amb);font-size:9px;margin-left:3px">&#9679;</span>')
+        +'</td>'
+      +'<td><span class="bk">'+esc(o.book)+'</span></td>'
+      +'<td style="color:var(--txb);font-weight:600">'+esc(fmtAm(o.am))+'</td>'
+      +'<td style="color:var(--txd)">'+esc(o.fairAm)+'</td>'
+      +'<td><span class="badge '+esc(evB)+'">+'+esc(o.ev.toFixed(1))+'%</span></td>'
+      +'<td style="color:var(--amb);font-size:10px">'+esc(o.kelly.toFixed(1))+'%</td>';
+    tbody.appendChild(tr);
+  });
+  var table = document.createElement('table');
+  table.className = 'dt';
+  table.innerHTML = '<thead><tr><th>Event</th><th>Outcome</th><th>Book</th><th>Odds</th><th>Fair</th><th>EV %</th><th>&#188; Kelly</th></tr></thead>';
+  table.appendChild(tbody);
+  pn.innerHTML = '';
+  pn.appendChild(warningBar);
+  pn.appendChild(table);
 }
 
-
+// ── RENDER KALSHI ────────────────────────────────────────────────────────
 function renderKalshi(){
   var pn = document.getElementById('pn-kalshi');
   var arbOnly = document.getElementById('kArbOnly').value === 'true';
   var mkts = appData.kalshi.slice();
   if(arbOnly) mkts = mkts.filter(function(m){ return m.isArb; });
-  mkts.sort(function(a,b){ return (b.isArb-a.isArb) || ((b.volume_24h||0)-(a.volume_24h||0)); });
+  mkts.sort(function(a,b){ return (b.isArb-a.isArb)||((b.volume_24h||0)-(a.volume_24h||0)); });
   if(!mkts.length){
     pn.innerHTML = '<div class="empty"><div class="empty-ico">&#127963;</div><div class="empty-t">No markets</div><div class="empty-s">No markets match filter. Try removing arb-only filter.</div></div>';
     return;
   }
-  var cards = mkts.map(function(m){
-    var id = regOpp({type:'kalshi', event:m.title||m.ticker, title:m.title, ticker:m.ticker,
-      yes_ask:m.yes_ask, no_ask:m.no_ask, yes_bid:m.yes_bid, no_bid:m.no_bid,
-      arbPct:m.arbPct, isArb:m.isArb, category:m.category, volume_24h:m.volume_24h, close_time:m.close_time});
-    var arbTag = m.isArb ? '<span class="k-arb-tag">&#9889; '+m.arbPct.toFixed(1)+'&#162; arb</span>' : '';
+  // fix #3: all Kalshi data escaped via esc()
+  var grid = document.createElement('div');
+  grid.className = 'k-grid';
+  mkts.forEach(function(m){
+    var row = document.createElement('div');
+    row.className = 'k-row'+(m.isArb?' arb':'');
+    var arbTag = m.isArb
+      ? '<span class="k-arb-tag">&#9889; '+esc(m.arbPct.toFixed(1))+'&#162; arb</span>'
+      : '';
     var vol = m.volume_24h ? '$'+(m.volume_24h/1000).toFixed(1)+'k' : '';
-    return '<div class="k-row '+(m.isArb?'arb':'')+'"><div><div class="k-t">'+(m.title||m.ticker)+'</div><div class="k-m"><span>'+(m.category||'&#8212;')+'</span>'+(vol?'<span>'+vol+' vol</span>':'')+'<span>'+fmtTime(m.close_time)+'</span></div>'+arbTag+'</div><div style="display:flex;gap:10px;align-items:center"><div class="k-prices"><div class="k-p"><div class="k-pl">YES ask</div><div class="k-pv y">'+(m.yes_ask||'&#8212;')+'&#162;</div></div><div class="k-sep">|</div><div class="k-p"><div class="k-pl">NO ask</div><div class="k-pv n">'+(m.no_ask||'&#8212;')+'&#162;</div></div></div><button class="ai-r" onclick="analyzeRow(\''+id+'\')">AI &#9658;</button></div></div>';
-  }).join('');
-  pn.innerHTML = '<div class="k-grid">'+cards+'</div>';
-}
-
-// ── OLLAMA ────────────────────────────────────────────────────────────────
-async function callOllama(prompt){
-  var mode = cfg.olMode || 'api';
-  var model = cfg.olModel || 'llama3';
-  var headers = {'Content-Type':'application/json'};
-  var url, body;
-
-  if(mode === 'api'){
-    // OpenAI-compatible /v1/chat/completions endpoint
-    if(!cfg.olApiKey) throw new Error('No API key set — open Settings');
-    var base = cfg.olApiUrl || 'https://api.openai.com/v1';
-    url = base+'/chat/completions';
-    headers['Authorization'] = 'Bearer '+cfg.olApiKey;
-    body = JSON.stringify({
-      model: model,
-      messages:[{role:'user', content:prompt}],
-      temperature:0.25,
-      max_tokens:800
-    });
-  } else {
-    // Local Ollama /api/generate endpoint
-    if(!cfg.olUrl) throw new Error('No Ollama URL set — open Settings');
-    url = cfg.olUrl+'/api/generate';
-    body = JSON.stringify({model:model, prompt:prompt, stream:false, options:{temperature:0.25}});
-  }
-
-  var r = await fetch(url, {method:'POST', headers:headers, body:body});
-  if(!r.ok){
-    var errText = '';
-    try{ var ej=await r.json(); errText=ej.error?.message||ej.message||JSON.stringify(ej); }catch(e2){ errText=await r.text().catch(function(){ return ''; }); }
-    throw new Error(r.status+(errText?' — '+errText:''));
-  }
-  var d = await r.json();
-  // OpenAI-compatible response
-  if(d.choices && d.choices[0]) return d.choices[0].message?.content || d.choices[0].text || '';
-  // Local Ollama response
-  return d.response || (d.message && d.message.content) || '';
-}
-
-function toggleOlMode(mode){
-  var isApi = mode === 'api';
-  document.getElementById('olApiKeyRow').style.display = isApi ? '' : 'none';
-  document.getElementById('olApiUrlRow').style.display = isApi ? '' : 'none';
-  document.getElementById('olLocalRow').style.display = isApi ? 'none' : '';
-  document.getElementById('olHint').innerHTML = isApi
-    ? '<b>API Key mode:</b> works with any OpenAI-compatible hosted service.<br>API URL should end in <b>/v1</b> (e.g. <b>https://api.yourprovider.com/v1</b>).'
-    : '<b>Local mode:</b> Ollama must be running locally.<br>For CORS: <b>OLLAMA_ORIGINS=* ollama serve</b>';
-}
-
-async function testOllama(){
-  var mode = document.getElementById('olMode').value;
-  var res = document.getElementById('olTestResult');
-  res.textContent = 'Testing…'; res.style.color = 'var(--txd)';
-  var tmpCfg = {
-    olMode: mode,
-    olApiKey: document.getElementById('ollamaApiKey').value.trim(),
-    olApiUrl: document.getElementById('ollamaApiUrl').value.trim().replace(/\/$/, ''),
-    olUrl: document.getElementById('ollamaUrl').value.trim().replace(/\/$/, ''),
-    olModel: document.getElementById('ollamaModel').value.trim() || 'llama3'
-  };
-  var savedCfg = {olMode:cfg.olMode, olApiKey:cfg.olApiKey, olApiUrl:cfg.olApiUrl, olUrl:cfg.olUrl, olModel:cfg.olModel};
-  Object.assign(cfg, tmpCfg);
-  try{
-    var reply = await callOllama('Reply with only the word PONG.');
-    res.textContent = '✓ '+(reply||'connected').substring(0,30);
-    res.style.color = 'var(--grn)';
-  }catch(e){
-    res.textContent = '✗ '+e.message.substring(0,50);
-    res.style.color = 'var(--red)';
-    Object.assign(cfg, savedCfg);
-  }
-}
-
-function addMsg(html, cls){
-  var c = document.getElementById('aiMsgs');
-  var d = document.createElement('div');
-  d.className = 'msg '+(cls||'');
-  d.innerHTML = html;
-  c.appendChild(d);
-  c.scrollTop = c.scrollHeight;
-  return d;
-}
-
-function setAI(on){
-  document.getElementById('aiDot').className = 'dot'+(on?' on':'');
-  document.getElementById('topBtn').disabled = on;
-}
-
-async function analyzeRow(id){
-  var o = oppReg[id];
-  if(!o){ toast('Opportunity not found','err'); return; }
-  var olReady2 = (cfg.olMode==='api' && cfg.olApiKey) || (cfg.olMode!=='api' && cfg.olUrl);
-  if(!olReady2){ toast('Configure Ollama in Settings','warn'); openSet(); return; }
-  setAI(true);
-  var thinking = addMsg('<div class="msg-hdr">&#129302; analyzing: '+(o.event||'market').substring(0,40)+'</div><span class="spin"></span> querying '+cfg.olModel+'…', 'thinking');
-  var prompt = '';
-  if(o.type === 'arb'){
-    prompt = 'You are a sharp sports betting analyst. Analyze this arbitrage opportunity concisely:\n\nEvent: '+o.event+'\nSport: '+o.sport+'\nArb profit: '+o.pct.toFixed(2)+'%\nLegs:\n'+o.legs.map(function(l){ return '  * '+l.out+': '+fmtAm(l.am)+' @ '+l.book+' (stake '+l.stake+'%)'; }).join('\n')+'\n\nRate it SCORE: X/10. Cover: (1) attractiveness of the edge, (2) main risks (line movement, account limits, timing), (3) recommended action. Max 4 sentences per point.';
-  } else if(o.type === 'ev'){
-    prompt = 'You are a sharp sports betting analyst. Analyze this +EV bet:\n\nEvent: '+o.event+'\nOutcome: '+o.outcome+'\nBook: '+o.book+'\nBook odds: '+fmtAm(o.am)+' ('+o.bookImp.toFixed(1)+'% implied)\nFair odds: '+o.fairAm+' ('+o.fairImp.toFixed(1)+'% fair)\nExpected value: +'+o.ev.toFixed(2)+'%\nQuarter Kelly stake: '+o.kelly.toFixed(1)+'%\nDevig method: '+(o.devigMethod||'unknown')+(o.reliable?' (high confidence)':' (lower confidence — Pinnacle not present)')+' \n\nRate it SCORE: X/10. Cover: (1) quality of edge and confidence in the fair line, (2) why this soft book might be offering better odds than sharp consensus, (3) stake and timing recommendation. Max 4 sentences per point.';
-  } else {
-    prompt = 'You are a prediction market analyst. Analyze this Kalshi market:\n\nMarket: '+(o.event||o.title||o.ticker)+'\nCategory: '+(o.category||'—')+'\nYES ask: '+o.yes_ask+'¢ | NO ask: '+o.no_ask+'¢\nYES bid: '+o.yes_bid+'¢ | NO bid: '+o.no_bid+'¢\nInternal arb: '+(o.isArb?'YES — '+o.arbPct.toFixed(1)+'¢ profit':'No')+'\n24h volume: $'+((o.volume_24h||0)/1000).toFixed(1)+'k\n\nRate it SCORE: X/10. Cover: (1) market pricing assessment, (2) key factors to watch, (3) recommended position (YES/NO/pass) with reasoning. Max 3 sentences per point.';
-  }
-  try{
-    var resp = await callOllama(prompt);
-    var scoreM = resp.match(/SCORE:\s*(\d+(?:\.\d+)?)\s*\/\s*10/i);
-    var score = scoreM ? parseFloat(scoreM[1]) : null;
-    var sc = score !== null ? (score>=7?'s-hi':score>=5?'s-mid':'s-lo') : '';
-    var scoreHtml = score !== null ? '<div class="score-big '+sc+'">'+score+'<span style="font-size:14px;font-weight:400;color:var(--txd)">/10</span></div>' : '';
-    var body = resp.replace(/SCORE:\s*\d+(?:\.\d+)?\s*\/\s*10/gi,'')
-      .replace(/\n\n+/g,'<br><br>').replace(/\n/g,'<br>')
-      .replace(/\*\*(.*?)\*\*/g,'<b style="color:var(--txb)">$1</b>').trim();
-    thinking.className = 'msg done';
-    thinking.innerHTML = '<div class="msg-hdr">&#129302; '+cfg.olModel+' — '+o.type.toUpperCase()+'</div>'+scoreHtml+'<div style="font-size:11px;line-height:1.7">'+body+'</div>';
-    document.getElementById('sdOl').className='sd ok';
-    document.getElementById('stOl').textContent='Ollama: '+cfg.olModel+' ✓';
-  }catch(e){
-    thinking.className = 'msg err';
-    thinking.innerHTML = '<div class="msg-hdr" style="color:var(--red)">&#9888; Ollama error</div><div style="font-size:11px;color:var(--red)">'+e.message+'</div><div style="font-size:10px;color:var(--txd);margin-top:7px">Make sure Ollama is running.<br>For CORS: <b style="color:var(--amb)">OLLAMA_ORIGINS=* ollama serve</b></div>';
-    document.getElementById('sdOl').className='sd err';
-  }finally{ setAI(false); }
-}
-
-async function analyzeTop(){
-  var all = appData.arb.slice(0,2).concat(appData.ev.slice(0,2))
-    .concat(appData.kalshi.filter(function(m){ return m.isArb; }).slice(0,1).map(function(m){
-      return {type:'kalshi', event:m.title||m.ticker, yes_ask:m.yes_ask, no_ask:m.no_ask, arbPct:m.arbPct, isArb:m.isArb};
-    }));
-  if(!all.length){ toast('Scan markets first to find opportunities','warn'); return; }
-  var olReady3 = (cfg.olMode==='api' && cfg.olApiKey) || (cfg.olMode!=='api' && cfg.olUrl);
-  if(!olReady3){ toast('Configure Ollama in Settings','warn'); openSet(); return; }
-  setAI(true);
-  var lines = all.map(function(o,i){
-    if(o.type==='arb') return (i+1)+'. ARB: '+o.event+' (+'+o.pct.toFixed(2)+'% guaranteed)';
-    if(o.type==='ev') return (i+1)+'. +EV: '+o.outcome+' on '+o.event+' via '+o.book+' (EV +'+o.ev.toFixed(1)+'%)';
-    return (i+1)+'. KALSHI: '+o.event+' (YES '+o.yes_ask+'¢ / NO '+o.no_ask+'¢'+(o.isArb?' — INTERNAL ARB':'')+')';
-  }).join('\n');
-  var prompt = 'You are a professional betting analyst. Here are the best opportunities from a market scan:\n\n'+lines+'\n\nProvide a concise executive summary (under 180 words):\n1. Rank them best to worst and explain why\n2. Top recommendation with actionable advice\n3. One risk warning to keep in mind\n\nBe direct and professional.';
-  var thinking = addMsg('<div class="msg-hdr">&#128202; analyzing '+all.length+' top picks…</div><span class="spin"></span> querying '+cfg.olModel+'…','thinking');
-  try{
-    var resp = await callOllama(prompt);
-    var body = resp.replace(/\n\n+/g,'<br><br>').replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b style="color:var(--txb)">$1</b>');
-    thinking.className = 'msg done';
-    thinking.innerHTML = '<div class="msg-hdr">&#128202; top picks summary — '+cfg.olModel+'</div><div style="font-size:11px;line-height:1.7">'+body+'</div>';
-  }catch(e){
-    thinking.className = 'msg err';
-    thinking.innerHTML = '<div style="color:var(--red);font-size:11px">Error: '+e.message+'</div>';
-  }finally{ setAI(false); }
+    row.innerHTML =
+      '<div>'
+        +'<div class="k-t">'+esc(m.title||m.ticker)+'</div>'
+        +'<div class="k-m">'
+          +'<span>'+esc(m.category||'—')+'</span>'
+          +(vol?'<span>'+esc(vol)+' vol</span>':'')
+          +'<span>'+esc(fmtTime(m.close_time))+'</span>'
+        +'</div>'
+        +arbTag
+      +'</div>'
+      +'<div class="k-prices">'
+        +'<div class="k-p"><div class="k-pl">YES ask</div><div class="k-pv y">'+esc(m.yes_ask||'—')+'&#162;</div></div>'
+        +'<div class="k-sep">|</div>'
+        +'<div class="k-p"><div class="k-pl">NO ask</div><div class="k-pv n">'+esc(m.no_ask||'—')+'&#162;</div></div>'
+      +'</div>';
+    grid.appendChild(row);
+  });
+  pn.innerHTML = '';
+  pn.appendChild(grid);
 }
 
 // ── INIT ─────────────────────────────────────────────────────────────────
 function init(){
   loadCfg(); updateStatus();
-  document.getElementById('minEV').value = cfg.minEV;
+  document.getElementById('minEV').value  = cfg.minEV;
   document.getElementById('minArb').value = cfg.minArb;
   document.getElementById('setModal').addEventListener('click', function(e){
     if(e.target === this) closeSet();
   });
+  // Key is never auto-loaded — prompt settings on first visit
   if(cfg.key) loadSports();
   else setTimeout(openSet, 700);
 }

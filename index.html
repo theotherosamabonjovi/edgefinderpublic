@@ -205,17 +205,36 @@ select.sf option{background:var(--s2)}
       <div class="msec-t">Ollama</div>
       <div class="fgrp">
         <div class="f">
-          <label>Base URL</label>
+          <label>Mode</label>
+          <select id="olMode" onchange="toggleOlMode(this.value)" style="background:var(--s2);border:1px solid var(--b1);color:var(--tx);font-family:var(--mono);font-size:11px;padding:8px 11px;border-radius:5px;outline:none;width:100%">
+            <option value="api">API Key (hosted service)</option>
+            <option value="local">Local URL (self-hosted)</option>
+          </select>
+        </div>
+        <div class="f" id="olApiKeyRow">
+          <label>API Key</label>
+          <input type="password" id="ollamaApiKey" placeholder="sk-… or your provider key">
+        </div>
+        <div class="f" id="olApiUrlRow">
+          <label>API Base URL</label>
+          <input type="text" id="ollamaApiUrl" placeholder="https://api.yourprovider.com/v1">
+        </div>
+        <div class="f" id="olLocalRow" style="display:none">
+          <label>Local Base URL</label>
           <input type="text" id="ollamaUrl" placeholder="http://localhost:11434">
         </div>
         <div class="f">
           <label>Model name</label>
-          <input type="text" id="ollamaModel" placeholder="llama3">
+          <input type="text" id="ollamaModel" placeholder="llama3, mistral, etc.">
         </div>
       </div>
-      <div class="hint">
-        If AI calls fail with a CORS error, restart Ollama with:<br>
-        <b>OLLAMA_ORIGINS=* ollama serve</b>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <button class="btn2" style="flex:1;cursor:pointer" onclick="testOllama()">&#9654; Test Connection</button>
+        <span id="olTestResult" style="font-size:10px;color:var(--txd)">—</span>
+      </div>
+      <div class="hint" id="olHint">
+        <b>API Key mode:</b> works with any OpenAI-compatible hosted Ollama service.<br>
+        The API URL should end in <b>/v1</b> (e.g. <b>https://api.example.com/v1</b>).
       </div>
     </div>
 
@@ -264,9 +283,15 @@ select.sf option{background:var(--s2)}
     <div class="sb-sec">
       <div class="sec-lbl">Odds API</div>
       <div class="inp-row">
-        <div class="inp-lbl">Sport / League</div>
+        <div class="inp-lbl">Scope</div>
         <select class="sf" id="sportSel">
-          <option value="">-- load sports first --</option>
+          <option value="__all__">All Sports (scan everything)</option>
+        </select>
+      </div>
+      <div class="inp-row">
+        <div class="inp-lbl">Sport Group Filter</div>
+        <select class="sf" id="sportGroup">
+          <option value="">No filter — all groups</option>
         </select>
       </div>
       <div class="inp-row">
@@ -276,6 +301,17 @@ select.sf option{background:var(--s2)}
           <option value="spreads">Spreads</option>
           <option value="totals">Totals (O/U)</option>
         </select>
+      </div>
+      <div class="inp-row">
+        <div class="inp-lbl">Concurrency (req at once)</div>
+        <select class="sf" id="concurrency">
+          <option value="2">2 — safe (avoid rate limits)</option>
+          <option value="4" selected>4 — balanced</option>
+          <option value="8">8 — fast (uses quota faster)</option>
+        </select>
+      </div>
+      <div style="font-size:10px;color:var(--txd);line-height:1.6;padding:6px 8px;background:var(--s3);border-radius:4px;border:1px solid var(--b1)">
+        <span id="scanProgressMsg">Load sports list, then scan.</span>
       </div>
     </div>
 
@@ -401,7 +437,7 @@ select.sf option{background:var(--s2)}
 // ── STATE ────────────────────────────────────────────────────────────────
 const cfg = {
   key:'', regions:'us',
-  olUrl:'http://localhost:11434', olModel:'llama3',
+  olMode:'api', olUrl:'', olModel:'', olApiKey:'', olApiUrl:'',
   minEV:3, minArb:0.1
 };
 const appData = { arb:[], ev:[], kalshi:[], sports:[] };
@@ -430,8 +466,12 @@ function toast(msg, type){
 function openSet(){
   document.getElementById('oddsKey').value = cfg.key || '';
   document.getElementById('oddsRegions').value = cfg.regions || 'us';
+  document.getElementById('olMode').value = cfg.olMode || 'api';
+  document.getElementById('ollamaApiKey').value = cfg.olApiKey || '';
+  document.getElementById('ollamaApiUrl').value = cfg.olApiUrl || '';
   document.getElementById('ollamaUrl').value = cfg.olUrl || '';
   document.getElementById('ollamaModel').value = cfg.olModel || '';
+  toggleOlMode(cfg.olMode || 'api');
   document.getElementById('cfgMinEV').value = cfg.minEV;
   document.getElementById('cfgMinArb').value = cfg.minArb;
   document.getElementById('setModal').classList.add('open');
@@ -440,8 +480,11 @@ function closeSet(){ document.getElementById('setModal').classList.remove('open'
 function saveSet(){
   cfg.key = document.getElementById('oddsKey').value.trim();
   cfg.regions = document.getElementById('oddsRegions').value.trim() || 'us';
-  cfg.olUrl = document.getElementById('ollamaUrl').value.trim() || 'http://localhost:11434';
-  cfg.olModel = document.getElementById('ollamaModel').value.trim() || 'llama3';
+  cfg.olMode = document.getElementById('olMode').value || 'api';
+  cfg.olApiKey = document.getElementById('ollamaApiKey').value.trim();
+  cfg.olApiUrl = document.getElementById('ollamaApiUrl').value.trim().replace(/\/$/, '');
+  cfg.olUrl = document.getElementById('ollamaUrl').value.trim().replace(/\/$/, '');
+  cfg.olModel = document.getElementById('ollamaModel').value.trim();
   cfg.minEV = parseFloat(document.getElementById('cfgMinEV').value) || 3;
   cfg.minArb = parseFloat(document.getElementById('cfgMinArb').value) || 0.1;
   document.getElementById('minEV').value = cfg.minEV;
@@ -482,7 +525,8 @@ function updateStatus(){
   else { sdO.className='sd err'; stO.textContent='Odds API: no key'; }
 
   var sdOl = document.getElementById('sdOl'), stOl = document.getElementById('stOl');
-  if(cfg.olUrl){ sdOl.className='sd warn'; stOl.textContent='Ollama: '+(cfg.olModel||'—'); }
+  var olReady = (cfg.olMode==='api' && cfg.olApiKey) || (cfg.olMode==='local' && cfg.olUrl);
+  if(olReady){ sdOl.className='sd warn'; stOl.textContent='Ollama: '+(cfg.olModel||'—')+' ('+(cfg.olMode==='api'?'API key':'local')+')'; }
   else { sdOl.className='sd'; stOl.textContent='Ollama: not configured'; }
 }
 
@@ -547,9 +591,16 @@ async function loadSports(){
     var sports = await oddsApiFetch('https://api.the-odds-api.com/v4/sports?apiKey='+cfg.key+'&all=false');
     appData.sports = sports;
     var sel = document.getElementById('sportSel');
-    sel.innerHTML = '<option value="">-- select a sport --</option>';
+    sel.innerHTML = '<option value="__all__">All Sports (scan everything)</option>';
     var grps = {};
     sports.forEach(function(s){ if(!grps[s.group]) grps[s.group]=[]; grps[s.group].push(s); });
+    // populate group filter
+    var grpSel = document.getElementById('sportGroup');
+    grpSel.innerHTML = '<option value="">No filter — all groups</option>';
+    Object.keys(grps).forEach(function(g){
+      var o = document.createElement('option'); o.value=g; o.textContent=g+' ('+grps[g].length+')'; grpSel.appendChild(o);
+    });
+    // populate individual sports
     Object.entries(grps).forEach(function(entry){
       var og = document.createElement('optgroup'); og.label = entry[0];
       entry[1].forEach(function(s){
@@ -558,9 +609,11 @@ async function loadSports(){
       });
       sel.appendChild(og);
     });
-    toast('Loaded '+sports.length+' sports — now select one above', 'ok');
+    var totalSports = sports.length;
+    document.getElementById('scanProgressMsg').textContent = totalSports+' sports loaded. Ready to scan.';
+    toast('Loaded '+totalSports+' sports — hit Scan to scan all', 'ok');
     document.getElementById('sdOdds').className='sd ok';
-    document.getElementById('stOdds').textContent='Odds API: ready ('+sports.length+' sports)';
+    document.getElementById('stOdds').textContent='Odds API: ready ('+totalSports+' sports)';
   }catch(e){
     toast('Sports load failed: '+e.message, 'err');
     document.getElementById('sdOdds').className='sd err';
@@ -726,23 +779,71 @@ function processKalshi(raw){
   });
 }
 
+// ── BATCH FETCH HELPERS ──────────────────────────────────────────────────
+async function fetchAllSports(mkt, concurrency){
+  var sportSel = document.getElementById('sportSel').value;
+  var groupFilter = document.getElementById('sportGroup').value;
+  var sports;
+
+  if(sportSel === '__all__' || !sportSel){
+    // All sports, optionally filtered by group
+    sports = appData.sports.filter(function(s){
+      return !groupFilter || s.group === groupFilter;
+    });
+  } else {
+    // Single sport selected
+    var found = appData.sports.find(function(s){ return s.key === sportSel; });
+    sports = found ? [found] : [];
+  }
+
+  if(sports.length === 0){
+    if(appData.sports.length === 0){
+      toast('Load Sports List first', 'warn');
+      return [];
+    }
+    return [];
+  }
+
+  var allEvents = [];
+  var done = 0;
+  var total = sports.length;
+  var prog = document.getElementById('scanProgressMsg');
+
+  // Process in batches of `concurrency`
+  for(var i = 0; i < sports.length; i += concurrency){
+    var batch = sports.slice(i, i + concurrency);
+    var batchResults = await Promise.all(batch.map(function(s){
+      return fetchOdds(s.key, mkt).catch(function(){ return []; });
+    }));
+    batchResults.forEach(function(r){ allEvents = allEvents.concat(r); });
+    done += batch.length;
+    prog.textContent = 'Fetching odds: '+done+'/'+total+' sports… ('+allEvents.length+' events)';
+    prog.style.color = 'var(--amb)';
+    // Small yield to keep UI responsive
+    await new Promise(function(res){ setTimeout(res, 80); });
+  }
+
+  prog.textContent = 'Done — '+allEvents.length+' events across '+done+' sports.';
+  prog.style.color = 'var(--grn)';
+  return allEvents;
+}
+
 // ── MAIN SCAN ────────────────────────────────────────────────────────────
 async function runScan(){
   if(scanning) return;
-  var sport = document.getElementById('sportSel').value;
   var mkt = document.getElementById('mktSel').value;
   var minEV = parseFloat(document.getElementById('minEV').value) || 3;
   var minA = parseFloat(document.getElementById('minArb').value) || 0.1;
-  if(!cfg.key && sport){ toast('Set Odds API key in Settings first','warn'); openSet(); return; }
-  if(cfg.key && !sport && appData.sports.length > 0){ toast('Select a sport from the dropdown first','warn'); return; }
-  if(cfg.key && !sport && appData.sports.length === 0){ toast('Click "Load Sports List" first, then select a sport','warn'); return; }
+  var concur = parseInt(document.getElementById('concurrency').value) || 4;
+  if(!cfg.key){ toast('Set Odds API key in Settings first','warn'); openSet(); return; }
+  if(appData.sports.length === 0){ toast('Click "Load Sports List" first','warn'); return; }
   scanning = true;
   var btn = document.getElementById('scanBtn');
   btn.disabled = true; btn.classList.add('loading');
   btn.innerHTML = '<span class="spin"></span>Scanning…';
   try{
     var results = await Promise.all([
-      sport ? fetchOdds(sport, mkt) : Promise.resolve([]),
+      fetchAllSports(mkt, concur),
       fetchKalshi()
     ]);
     var events = results[0], kRaw = results[1];
@@ -828,15 +929,75 @@ function renderKalshi(){
 
 // ── OLLAMA ────────────────────────────────────────────────────────────────
 async function callOllama(prompt){
-  var url = (cfg.olUrl||'http://localhost:11434').replace(/\/$/, '');
-  var r = await fetch(url+'/api/generate', {
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body: JSON.stringify({model:cfg.olModel||'llama3', prompt:prompt, stream:false, options:{temperature:0.25}})
-  });
-  if(!r.ok) throw new Error('Ollama '+r.status+': '+await r.text());
+  var mode = cfg.olMode || 'api';
+  var model = cfg.olModel || 'llama3';
+  var headers = {'Content-Type':'application/json'};
+  var url, body;
+
+  if(mode === 'api'){
+    // OpenAI-compatible /v1/chat/completions endpoint
+    if(!cfg.olApiKey) throw new Error('No API key set — open Settings');
+    var base = cfg.olApiUrl || 'https://api.openai.com/v1';
+    url = base+'/chat/completions';
+    headers['Authorization'] = 'Bearer '+cfg.olApiKey;
+    body = JSON.stringify({
+      model: model,
+      messages:[{role:'user', content:prompt}],
+      temperature:0.25,
+      max_tokens:800
+    });
+  } else {
+    // Local Ollama /api/generate endpoint
+    if(!cfg.olUrl) throw new Error('No Ollama URL set — open Settings');
+    url = cfg.olUrl+'/api/generate';
+    body = JSON.stringify({model:model, prompt:prompt, stream:false, options:{temperature:0.25}});
+  }
+
+  var r = await fetch(url, {method:'POST', headers:headers, body:body});
+  if(!r.ok){
+    var errText = '';
+    try{ var ej=await r.json(); errText=ej.error?.message||ej.message||JSON.stringify(ej); }catch(e2){ errText=await r.text().catch(function(){ return ''; }); }
+    throw new Error(r.status+(errText?' — '+errText:''));
+  }
   var d = await r.json();
+  // OpenAI-compatible response
+  if(d.choices && d.choices[0]) return d.choices[0].message?.content || d.choices[0].text || '';
+  // Local Ollama response
   return d.response || (d.message && d.message.content) || '';
+}
+
+function toggleOlMode(mode){
+  var isApi = mode === 'api';
+  document.getElementById('olApiKeyRow').style.display = isApi ? '' : 'none';
+  document.getElementById('olApiUrlRow').style.display = isApi ? '' : 'none';
+  document.getElementById('olLocalRow').style.display = isApi ? 'none' : '';
+  document.getElementById('olHint').innerHTML = isApi
+    ? '<b>API Key mode:</b> works with any OpenAI-compatible hosted service.<br>API URL should end in <b>/v1</b> (e.g. <b>https://api.yourprovider.com/v1</b>).'
+    : '<b>Local mode:</b> Ollama must be running locally.<br>For CORS: <b>OLLAMA_ORIGINS=* ollama serve</b>';
+}
+
+async function testOllama(){
+  var mode = document.getElementById('olMode').value;
+  var res = document.getElementById('olTestResult');
+  res.textContent = 'Testing…'; res.style.color = 'var(--txd)';
+  var tmpCfg = {
+    olMode: mode,
+    olApiKey: document.getElementById('ollamaApiKey').value.trim(),
+    olApiUrl: document.getElementById('ollamaApiUrl').value.trim().replace(/\/$/, ''),
+    olUrl: document.getElementById('ollamaUrl').value.trim().replace(/\/$/, ''),
+    olModel: document.getElementById('ollamaModel').value.trim() || 'llama3'
+  };
+  var savedCfg = {olMode:cfg.olMode, olApiKey:cfg.olApiKey, olApiUrl:cfg.olApiUrl, olUrl:cfg.olUrl, olModel:cfg.olModel};
+  Object.assign(cfg, tmpCfg);
+  try{
+    var reply = await callOllama('Reply with only the word PONG.');
+    res.textContent = '✓ '+(reply||'connected').substring(0,30);
+    res.style.color = 'var(--grn)';
+  }catch(e){
+    res.textContent = '✗ '+e.message.substring(0,50);
+    res.style.color = 'var(--red)';
+    Object.assign(cfg, savedCfg);
+  }
 }
 
 function addMsg(html, cls){
@@ -857,7 +1018,8 @@ function setAI(on){
 async function analyzeRow(id){
   var o = oppReg[id];
   if(!o){ toast('Opportunity not found','err'); return; }
-  if(!cfg.olUrl){ toast('Set Ollama URL in Settings','warn'); openSet(); return; }
+  var olReady2 = (cfg.olMode==='api' && cfg.olApiKey) || (cfg.olMode!=='api' && cfg.olUrl);
+  if(!olReady2){ toast('Configure Ollama in Settings','warn'); openSet(); return; }
   setAI(true);
   var thinking = addMsg('<div class="msg-hdr">&#129302; analyzing: '+(o.event||'market').substring(0,40)+'</div><span class="spin"></span> querying '+cfg.olModel+'…', 'thinking');
   var prompt = '';
@@ -894,7 +1056,8 @@ async function analyzeTop(){
       return {type:'kalshi', event:m.title||m.ticker, yes_ask:m.yes_ask, no_ask:m.no_ask, arbPct:m.arbPct, isArb:m.isArb};
     }));
   if(!all.length){ toast('Scan markets first to find opportunities','warn'); return; }
-  if(!cfg.olUrl){ toast('Set Ollama URL in Settings','warn'); openSet(); return; }
+  var olReady3 = (cfg.olMode==='api' && cfg.olApiKey) || (cfg.olMode!=='api' && cfg.olUrl);
+  if(!olReady3){ toast('Configure Ollama in Settings','warn'); openSet(); return; }
   setAI(true);
   var lines = all.map(function(o,i){
     if(o.type==='arb') return (i+1)+'. ARB: '+o.event+' (+'+o.pct.toFixed(2)+'% guaranteed)';

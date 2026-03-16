@@ -184,6 +184,21 @@ select.sf option{background:var(--s2)}
     </div>
 
     <div class="msec">
+      <div class="msec-t">Kalshi API</div>
+      <div class="fgrp">
+        <div class="f">
+          <label>API Key</label>
+          <input type="password" id="kalshiKey" placeholder="Paste your Kalshi API key…" autocomplete="off">
+        </div>
+      </div>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <button class="btn2" style="flex:1;cursor:pointer" onclick="testKalshiKey()">&#9654; Test Key</button>
+        <span id="kalshiTestResult" style="font-size:10px;color:var(--txd)">—</span>
+      </div>
+      <div class="hint">Get your key at <b>kalshi.com</b> → Account → API Access.<br>Leave blank to use public (unauthenticated) data only.</div>
+    </div>
+
+    <div class="msec">
       <div class="msec-t">Scanner Thresholds</div>
       <div class="fgrp">
         <div class="f">
@@ -383,6 +398,7 @@ function esc(str){
 // ── STATE ────────────────────────────────────────────────────────────────
 const cfg = {
   key:'', regions:'us',
+  kalshiKey:'',
   minEV:3, minArb:0.1
 };
 const appData = { arb:[], ev:[], kalshi:[], sports:[] };
@@ -401,18 +417,20 @@ function regOpp(o){ const id='op'+(oppCounter++); oppReg[id]=o; return id; }
 function loadCfg(){
   try{
     var stored = JSON.parse(localStorage.getItem('ef_cfg')||'{}');
-    if(typeof stored.key     === 'string') cfg.key     = stored.key;
-    if(typeof stored.regions === 'string') cfg.regions = stored.regions;
-    if(typeof stored.minEV   === 'number') cfg.minEV   = stored.minEV;
-    if(typeof stored.minArb  === 'number') cfg.minArb  = stored.minArb;
+    if(typeof stored.key        === 'string') cfg.key        = stored.key;
+    if(typeof stored.regions    === 'string') cfg.regions    = stored.regions;
+    if(typeof stored.kalshiKey  === 'string') cfg.kalshiKey  = stored.kalshiKey;
+    if(typeof stored.minEV      === 'number') cfg.minEV      = stored.minEV;
+    if(typeof stored.minArb     === 'number') cfg.minArb     = stored.minArb;
   }catch(e){}
 }
 function saveCfg(){
   localStorage.setItem('ef_cfg', JSON.stringify({
-    key:     cfg.key,
-    regions: cfg.regions,
-    minEV:   cfg.minEV,
-    minArb:  cfg.minArb
+    key:        cfg.key,
+    regions:    cfg.regions,
+    kalshiKey:  cfg.kalshiKey,
+    minEV:      cfg.minEV,
+    minArb:     cfg.minArb
   }));
 }
 
@@ -426,16 +444,18 @@ function toast(msg, type){
 
 // ── SETTINGS MODAL ───────────────────────────────────────────────────────
 function openSet(){
-  document.getElementById('oddsKey').value = cfg.key || '';
-  document.getElementById('oddsRegions').value = cfg.regions || 'us';
+  document.getElementById('oddsKey').value    = cfg.key        || '';
+  document.getElementById('kalshiKey').value  = cfg.kalshiKey  || '';
+  document.getElementById('oddsRegions').value = cfg.regions   || 'us';
   document.getElementById('cfgMinEV').value = cfg.minEV;
   document.getElementById('cfgMinArb').value = cfg.minArb;
   document.getElementById('setModal').classList.add('open');
 }
 function closeSet(){ document.getElementById('setModal').classList.remove('open'); }
 function saveSet(){
-  cfg.key     = document.getElementById('oddsKey').value.trim();
-  cfg.regions = document.getElementById('oddsRegions').value.trim() || 'us';
+  cfg.key        = document.getElementById('oddsKey').value.trim();
+  cfg.kalshiKey  = document.getElementById('kalshiKey').value.trim();
+  cfg.regions    = document.getElementById('oddsRegions').value.trim() || 'us';
   // fix #13: use isNaN guard so that 0 is a valid threshold, not a fallback trigger
   var evVal  = parseFloat(document.getElementById('cfgMinEV').value);
   var arbVal = parseFloat(document.getElementById('cfgMinArb').value);
@@ -479,6 +499,10 @@ function updateStatus(){
   var sdO = document.getElementById('sdOdds'), stO = document.getElementById('stOdds');
   if(cfg.key){ sdO.className='sd ok'; stO.textContent='Odds API: configured'; }
   else { sdO.className='sd err'; stO.textContent='Odds API: no key'; }
+
+  var sdK = document.getElementById('sdK'), stK = document.getElementById('stK');
+  if(cfg.kalshiKey){ sdK.className='sd ok'; stK.textContent='Kalshi: key saved'; }
+  else { sdK.className='sd'; stK.textContent='Kalshi: public (no key)'; }
 }
 
 // ── TABS ─────────────────────────────────────────────────────────────────
@@ -651,6 +675,30 @@ function updateQuota(r){
 }
 
 // ── KALSHI ───────────────────────────────────────────────────────────────
+async function testKalshiKey(){
+  var key = document.getElementById('kalshiKey').value.trim();
+  var res = document.getElementById('kalshiTestResult');
+  if(!key){ res.textContent='No key entered'; res.style.color='var(--amb)'; return; }
+  res.textContent='Testing…'; res.style.color='var(--txd)';
+  try{
+    var r = await fetch('https://api.kalshi.com/trade-api/v2/markets?limit=1&status=open', {
+      headers:{ 'Accept':'application/json', 'Authorization':'Bearer '+key }
+    });
+    if(r.ok){
+      res.textContent='✓ Key valid — Kalshi connected';
+      res.style.color='var(--grn)';
+    } else {
+      var body='';
+      try{ var j=await r.json(); body=j.message||j.detail||''; }catch(e2){}
+      res.textContent='✗ '+r.status+(body?' — '+body.substring(0,60):'');
+      res.style.color='var(--red)';
+    }
+  }catch(e){
+    res.textContent='✗ Network error: '+e.message.substring(0,60);
+    res.style.color='var(--red)';
+  }
+}
+
 async function fetchKalshi(){
   var cat = document.getElementById('kCat').value;
   document.getElementById('sdK').className='sd warn';
@@ -659,14 +707,16 @@ async function fetchKalshi(){
     var url = new URL('https://api.kalshi.com/trade-api/v2/markets');
     url.searchParams.set('limit','200');
     url.searchParams.set('status','open');
-    if(cat) url.searchParams.set('category', cat); // URLSearchParams encodes automatically
-    var r = await fetch(url.toString(), {headers:{Accept:'application/json'}});
+    if(cat) url.searchParams.set('category', cat);
+    var headers = { 'Accept':'application/json' };
+    if(cfg.kalshiKey) headers['Authorization'] = 'Bearer '+cfg.kalshiKey;
+    var r = await fetch(url.toString(), {headers:headers});
     if(!r.ok) throw new Error('HTTP '+r.status);
     var ct = r.headers.get('content-type')||'';
     if(!ct.includes('application/json')) throw new Error('Non-JSON response from Kalshi');
     var d = await r.json();
     document.getElementById('sdK').className='sd ok';
-    document.getElementById('stK').textContent='Kalshi: live';
+    document.getElementById('stK').textContent='Kalshi: live'+(cfg.kalshiKey?' (authenticated)':' (public)');
     return d.markets || [];
   }catch(e){
     document.getElementById('sdK').className='sd err';

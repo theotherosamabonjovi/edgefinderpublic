@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <!-- CSP: works correctly when served over HTTPS (e.g. GitHub Pages).
      Do not open via file:// — use a local server or deploy to GitHub Pages. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.the-odds-api.com https://api.kalshi.com https://api.elections.kalshi.com; img-src 'none'; object-src 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.the-odds-api.com https://api.kalshi.com https://api.elections.kalshi.com https://trading-api.kalshi.com; img-src 'none'; object-src 'none';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EdgeFinder — Arb & +EV Scanner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -676,6 +676,26 @@ function updateQuota(r){
 }
 
 // ── KALSHI ───────────────────────────────────────────────────────────────
+async function kalshiFetch(urlStr){
+  // Try primary URL, then fallback
+  var urls = [
+    urlStr,
+    urlStr.replace('api.elections.kalshi.com', 'trading-api.kalshi.com')
+  ];
+  var lastErr = null;
+  for(var i = 0; i < urls.length; i++){
+    try{
+      var r = await fetch(urls[i], { headers:{ 'Accept':'application/json' } });
+      if(!r.ok) throw new Error('HTTP '+r.status+' from '+urls[i]);
+      var d = await r.json();
+      return d;
+    }catch(e){
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
+
 async function fetchKalshi(){
   var cat = document.getElementById('kCat').value;
   document.getElementById('sdK').className='sd warn';
@@ -684,40 +704,32 @@ async function fetchKalshi(){
     var allMarkets = [];
     var cursor = '';
     var page = 0;
-    var maxPages = 20; // safety cap — 20 × 1000 = up to 20,000 markets
+    var maxPages = 20;
 
     do {
-      var url = new URL('https://api.elections.kalshi.com/trade-api/v2/markets');
-      url.searchParams.set('limit', '1000');
-      url.searchParams.set('status', 'open');
-      if(cat)    url.searchParams.set('category', cat);
-      if(cursor) url.searchParams.set('cursor', cursor);
+      var urlObj = new URL('https://api.elections.kalshi.com/trade-api/v2/markets');
+      urlObj.searchParams.set('limit', '1000');
+      urlObj.searchParams.set('status', 'open');
+      if(cat)    urlObj.searchParams.set('category', cat);
+      if(cursor) urlObj.searchParams.set('cursor', cursor);
 
-      var r = await fetch(url.toString(), { headers:{ 'Accept':'application/json' } });
-      if(!r.ok) throw new Error('HTTP '+r.status+' from Kalshi API');
-      var ct = r.headers.get('content-type')||'';
-      if(!ct.includes('application/json')) throw new Error('Non-JSON response from Kalshi');
-
-      var d = await r.json();
+      var d = await kalshiFetch(urlObj.toString());
       var page_markets = d.markets || [];
       allMarkets = allMarkets.concat(page_markets);
-
       cursor = d.cursor || '';
       page++;
-
       document.getElementById('stK').textContent = 'Kalshi: loading… ('+allMarkets.length+' markets)';
-
-      // Stop if fewer results than limit came back (last page) or no cursor
     } while(cursor && page_markets.length === 1000 && page < maxPages);
 
     document.getElementById('sdK').className='sd ok';
-    document.getElementById('stK').textContent='Kalshi: live ('+allMarkets.length+' markets)';
+    document.getElementById('stK').textContent='Kalshi: '+allMarkets.length+' markets loaded';
     return allMarkets;
   }catch(e){
     document.getElementById('sdK').className='sd err';
-    document.getElementById('stK').textContent='Kalshi: error — '+e.message.substring(0,50);
-    toast('Kalshi fetch failed: '+e.message, 'err');
-    // Only fall back to demo if truly no data at all
+    document.getElementById('stK').textContent='Kalshi error: '+e.message.substring(0,60);
+    // Show full error in toast so it's visible
+    toast('Kalshi failed: '+e.message, 'err');
+    console.error('Kalshi fetch error:', e);
     return demoKalshi();
   }
 }

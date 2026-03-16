@@ -87,12 +87,13 @@ select.sf option{background:var(--s2)}
 .br{background:var(--red2);color:var(--red);border:1px solid var(--red)}
 .evp{color:var(--grn);font-weight:600;font-size:12px}
 .bk{display:inline-block;background:var(--s3);border:1px solid var(--b2);padding:2px 6px;border-radius:3px;font-size:9px;color:var(--txm)}
-.legs{display:flex;flex-direction:column;gap:3px}
-.leg{display:flex;align-items:center;gap:7px;font-size:10px}
-.lo{color:var(--txm);min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px}
-.ld{color:var(--txb);font-weight:500}
+.legs{display:flex;flex-direction:column;gap:5px}
+.leg{display:flex;flex-direction:column;gap:2px;font-size:10px}
+.lo{color:var(--txb);font-weight:500;white-space:normal;word-break:break-word;line-height:1.4}
+.leg-detail{display:flex;align-items:center;gap:6px}
+.ld{color:var(--grn);font-weight:600}
 .lb{color:var(--txd);font-size:9px}
-.lk{margin-left:auto;color:var(--amb);font-size:9px}
+.lk{color:var(--amb);font-size:9px}
 
 /* ── BOOK FILTER ── */
 .book-filter-list{display:flex;flex-direction:column;gap:4px;max-height:180px;overflow-y:auto;padding-right:2px}
@@ -828,9 +829,11 @@ function renderArb(){
     var legs=o.legs.map(function(l){
       return '<div class="leg">'
         +'<span class="lo">'+fmtOutcome(l.name, l.point)+'</span>'
-        +'<span class="ld">'+esc(fmtAm(l.am))+'</span>'
-        +'<span class="lb">'+esc(l.book)+'</span>'
-        +'<span class="lk">'+esc(l.stake)+'%</span>'
+        +'<div class="leg-detail">'
+          +'<span class="ld">'+esc(fmtAm(l.am))+'</span>'
+          +'<span class="lb">'+esc(l.book)+'</span>'
+          +'<span class="lk">stake '+esc(l.stake)+'%</span>'
+        +'</div>'
         +'</div>';
     }).join('');
     var tr=document.createElement('tr');

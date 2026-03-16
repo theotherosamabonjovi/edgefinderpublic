@@ -2,8 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<!-- CSP: fix #16 — restrict sources, block inline eval, forbid data: URLs for objects -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.the-odds-api.com https://api.kalshi.com; img-src 'none'; object-src 'none';">
+<!-- Note: a Content-Security-Policy header should be added at the server level
+     when deploying this file via a web server. A CSP meta tag cannot be used here
+     because opening the file via file:// treats 'self' as the file:// origin,
+     which blocks all outbound fetch() calls to https:// APIs. -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EdgeFinder — Arb & +EV Scanner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">

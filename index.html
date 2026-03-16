@@ -89,7 +89,7 @@ select.sf option{background:var(--s2)}
 .bk{display:inline-block;background:var(--s3);border:1px solid var(--b2);padding:2px 6px;border-radius:3px;font-size:9px;color:var(--txm)}
 .legs{display:flex;flex-direction:column;gap:3px}
 .leg{display:flex;align-items:center;gap:7px;font-size:10px}
-.lo{color:var(--txm);min-width:65px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:85px}
+.lo{color:var(--txm);min-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px}
 .ld{color:var(--txb);font-weight:500}
 .lb{color:var(--txd);font-size:9px}
 .lk{margin-left:auto;color:var(--amb);font-size:9px}
@@ -598,7 +598,16 @@ function extractBooks(events){
   return Object.keys(seen).sort();
 }
 
-// ── ARB FINDER ───────────────────────────────────────────────────────────
+// Format an outcome name + optional point value for display.
+// Returns an HTML string — caller must NOT additionally esc() it.
+function fmtOutcome(name, point){
+  var s = esc(name);
+  if(point !== undefined && point !== null){
+    var sign = point > 0 ? '+' : '';
+    s += ' <span style="color:var(--amb);background:var(--amb2);border:1px solid var(--amb);border-radius:3px;padding:1px 5px;font-size:9px;white-space:nowrap">'+sign+point+'</span>';
+  }
+  return s;
+}
 function findArb(events, minPct){
   var enabled = getEnabledBooks();
   var opps=[];
@@ -629,8 +638,7 @@ function findArb(events, minPct){
         sport:ev.sport_key, time:ev.commence_time, pct:pct, sumImp:sumImp,
         legs:keys.map(function(k){
           var b=best[k];
-          var label = b.out + (b.point !== undefined ? ' ('+b.point+')' : '');
-          return {out:label, book:b.book, am:b.am, dec:b.dec, imp:b.imp, stake:(b.imp/sumImp*100).toFixed(1)};
+          return {name:b.out, point:b.point, book:b.book, am:b.am, dec:b.dec, imp:b.imp, stake:(b.imp/sumImp*100).toFixed(1)};
         })
       });
     }
@@ -711,7 +719,7 @@ function findEV(events, minPct){
       if(evPct>=minPct){
         opps.push({
           type:'ev', event:ev.home_team+' vs '+ev.away_team, sport:ev.sport_key, time:ev.commence_time,
-          outcome:label, book:bestO.book, am:bestO.am, dec:bestO.dec,
+          outcome:bestO.name, point:bestO.point, book:bestO.book, am:bestO.am, dec:bestO.dec,
           fairDec:1/fair[key], fairAm:toAmerican(1/fair[key]),
           fairImp:fair[key]*100, bookImp:(1/bestO.dec)*100,
           ev:evPct, kelly:kelly, devigMethod:result.method, reliable:result.reliable
@@ -792,7 +800,12 @@ function renderArb(){
   var tbody=document.createElement('tbody');
   appData.arb.forEach(function(o){
     var legs=o.legs.map(function(l){
-      return '<div class="leg"><span class="lo">'+esc(l.out)+'</span><span class="ld">'+esc(fmtAm(l.am))+'</span><span class="lb">'+esc(l.book)+'</span><span class="lk">'+esc(l.stake)+'%</span></div>';
+      return '<div class="leg">'
+        +'<span class="lo">'+fmtOutcome(l.name, l.point)+'</span>'
+        +'<span class="ld">'+esc(fmtAm(l.am))+'</span>'
+        +'<span class="lb">'+esc(l.book)+'</span>'
+        +'<span class="lk">'+esc(l.stake)+'%</span>'
+        +'</div>';
     }).join('');
     var tr=document.createElement('tr');
     tr.style.background='rgba(0,232,122,.02)';
@@ -830,7 +843,7 @@ function renderEV(){
     var evB=o.ev>=10?'bg':o.ev>=5?'ba':'bb';
     var tr=document.createElement('tr');
     tr.innerHTML='<td style="font-size:11px;color:var(--txb);max-width:140px">'+esc(o.event)+'</td>'
-      +'<td style="font-size:11px">'+esc(o.outcome)
+      +'<td style="font-size:11px">'+fmtOutcome(o.outcome, o.point)
         +(o.reliable
           ?'<span title="'+esc(o.devigMethod)+'" style="color:var(--grn);font-size:9px;margin-left:3px">&#9679;</span>'
           :'<span title="Low confidence: '+esc(o.devigMethod)+'" style="color:var(--amb);font-size:9px;margin-left:3px">&#9679;</span>')

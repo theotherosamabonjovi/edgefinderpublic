@@ -188,11 +188,14 @@ select.sf option{background:var(--s2)}
       <div class="fgrp">
         <div class="f">
           <label>API Key</label>
-          <input type="password" id="kalshiKey" placeholder="Paste your Kalshi API key…" autocomplete="off">
+          <div style="display:flex;gap:6px;align-items:center">
+            <input type="text" id="kalshiKey" placeholder="Paste your Kalshi API key…" autocomplete="new-password" style="flex:1;background:var(--s2);border:1px solid var(--b1);color:var(--tx);font-family:var(--mono);font-size:11px;padding:8px 11px;border-radius:5px;outline:none;transition:border-color .15s;letter-spacing:0.05em">
+            <button class="btn2" style="flex-shrink:0;padding:8px 10px" onclick="toggleKalshiKeyVis(this)" title="Show/hide key">&#128065;</button>
+          </div>
         </div>
       </div>
       <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
-        <button class="btn2" style="flex:1;cursor:pointer" onclick="testKalshiKey()">&#9654; Test Key</button>
+        <button class="btn2" style="flex:1;cursor:pointer" onclick="testKalshiKey()">&#9654; Test &amp; Save Key</button>
         <span id="kalshiTestResult" style="font-size:10px;color:var(--txd)">—</span>
       </div>
       <div class="hint" style="margin-top:8px">Get your key at <b>kalshi.com</b> → Account → API Access.<br>Leave blank to use public (unauthenticated) data only.</div>
@@ -456,10 +459,22 @@ function toast(msg, type){
 
 // ── SETTINGS MODAL ───────────────────────────────────────────────────────
 function openSet(){
-  document.getElementById('oddsKey').value    = cfg.key        || '';
-  document.getElementById('kalshiKey').value  = cfg.kalshiKey  || '';
-  document.getElementById('oddsRegions').value = cfg.regions   || 'us';
-  document.getElementById('cfgMinEV').value = cfg.minEV;
+  document.getElementById('oddsKey').value     = cfg.key        || '';
+  // Set kalshi key value directly — type=text so no browser suppression
+  var kInp = document.getElementById('kalshiKey');
+  kInp.value = cfg.kalshiKey || '';
+  // Start masked if a key exists
+  if(cfg.kalshiKey){
+    kInp.dataset.masked = 'true';
+    kInp.style.webkitTextSecurity = 'disc';
+    kInp.style.letterSpacing = '0.2em';
+  } else {
+    kInp.dataset.masked = 'false';
+    kInp.style.webkitTextSecurity = '';
+    kInp.style.letterSpacing = '0.05em';
+  }
+  document.getElementById('oddsRegions').value  = cfg.regions   || 'us';
+  document.getElementById('cfgMinEV').value  = cfg.minEV;
   document.getElementById('cfgMinArb').value = cfg.minArb;
   document.getElementById('setModal').classList.add('open');
 }
@@ -697,6 +712,23 @@ function updateQuota(r){
 }
 
 // ── KALSHI ───────────────────────────────────────────────────────────────
+function toggleKalshiKeyVis(btn){
+  var inp = document.getElementById('kalshiKey');
+  // The field is type=text; we fake masking with letter-spacing + font tricks
+  // Instead, just toggle between showing plaintext and dots via a data attribute
+  if(inp.dataset.masked === 'true'){
+    inp.dataset.masked = 'false';
+    inp.style.webkitTextSecurity = '';
+    inp.style.letterSpacing = '0.05em';
+    btn.textContent = '🙈';
+  } else {
+    inp.dataset.masked = 'true';
+    inp.style.webkitTextSecurity = 'disc';
+    inp.style.letterSpacing = '0.2em';
+    btn.textContent = '👁';
+  }
+}
+
 async function testKalshiKey(){
   var key = document.getElementById('kalshiKey').value.trim();
   var res = document.getElementById('kalshiTestResult');
@@ -707,7 +739,11 @@ async function testKalshiKey(){
       headers:{ 'Accept':'application/json', 'Authorization':'Bearer '+key }
     });
     if(r.ok){
-      res.textContent='✓ Key valid — Kalshi connected';
+      // Auto-save the key immediately on success
+      cfg.kalshiKey = key;
+      saveCfg();
+      updateStatus();
+      res.textContent='✓ Key saved — Kalshi connected';
       res.style.color='var(--grn)';
     } else {
       var body='';

@@ -608,37 +608,44 @@ function fmtOutcome(name, point){
   }
   return s;
 }
+// Build a canonical signature for a market's outcomes so we only compare
+// books offering the EXACT same line (same names AND same points).
+function marketSig(outcomes){
+  return outcomes.map(function(o){
+    return o.name + (o.point !== undefined && o.point !== null ? ':' + o.point : '');
+  }).sort().join('|');
+}
+
 function findArb(events, minPct){
   var enabled = getEnabledBooks();
   var opps = [];
   events.forEach(function(ev){
-    // lineMap[lineKey][outcomeName] = [{book, am, dec, imp, point}]
-    // lineKey = '' for moneylines, abs(point) for spreads/totals
-    // This ensures Team A -3.5 and Team B +3.5 are treated as the same line,
-    // and a different line (e.g. -3 / +3) is checked separately.
-    var lineMap = {};
+    // sigMap[sig][outcomeName] = [{book, am, dec, imp, point}]
+    // Each distinct market signature (e.g. "TeamA:-3.5|TeamB:3.5") is a separate line.
+    var sigMap = {};
     (ev.bookmakers||[]).forEach(function(bm){
       if(!enabled.has(bm.title)) return;
       (bm.markets||[]).forEach(function(mkt){
-        (mkt.outcomes||[]).forEach(function(out){
+        var outcomes = mkt.outcomes || [];
+        if(!outcomes.length) return;
+        var sig = marketSig(outcomes);
+        if(!sigMap[sig]) sigMap[sig] = {};
+        outcomes.forEach(function(out){
           var dec = toDecimal(out.price);
           if(!dec) return;
-          var lineKey = out.point !== undefined ? String(Math.abs(out.point)) : '';
-          if(!lineMap[lineKey]) lineMap[lineKey] = {};
-          if(!lineMap[lineKey][out.name]) lineMap[lineKey][out.name] = [];
-          lineMap[lineKey][out.name].push({book:bm.title, am:out.price, dec:dec, imp:1/dec, point:out.point});
+          if(!sigMap[sig][out.name]) sigMap[sig][out.name] = [];
+          sigMap[sig][out.name].push({book:bm.title, am:out.price, dec:dec, imp:1/dec, point:(out.point !== undefined ? out.point : null)});
         });
       });
     });
-    // Check arb for each line independently
-    Object.keys(lineMap).forEach(function(lineKey){
-      var sides = lineMap[lineKey];
+    Object.keys(sigMap).forEach(function(sig){
+      var sides = sigMap[sig];
       var names = Object.keys(sides);
       if(names.length < 2) return;
       var best = {};
       names.forEach(function(n){ best[n] = sides[n].reduce(function(a,b){ return b.dec>a.dec?b:a; }); });
-      var sumImp = names.reduce(function(s,n){ return s+best[n].imp; }, 0);
-      var pct = (1-sumImp)*100;
+      var sumImp = names.reduce(function(s,n){ return s + best[n].imp; }, 0);
+      var pct = (1 - sumImp) * 100;
       if(pct > 0 && pct >= minPct){
         opps.push({
           type:'arb', event:ev.home_team+' vs '+ev.away_team,
@@ -703,24 +710,25 @@ function findEV(events, minPct){
   var enabled = getEnabledBooks();
   var opps = [];
   events.forEach(function(ev){
-    // Same line-grouped structure as findArb
-    var lineMap = {};
+    // Same signature-based grouping as findArb
+    var sigMap = {};
     (ev.bookmakers||[]).forEach(function(bm){
       if(!enabled.has(bm.title)) return;
       (bm.markets||[]).forEach(function(mkt){
-        (mkt.outcomes||[]).forEach(function(out){
+        var outcomes = mkt.outcomes || [];
+        if(!outcomes.length) return;
+        var sig = marketSig(outcomes);
+        if(!sigMap[sig]) sigMap[sig] = {};
+        outcomes.forEach(function(out){
           var dec = toDecimal(out.price);
           if(!dec) return;
-          var lineKey = out.point !== undefined ? String(Math.abs(out.point)) : '';
-          if(!lineMap[lineKey]) lineMap[lineKey] = {};
-          if(!lineMap[lineKey][out.name]) lineMap[lineKey][out.name] = [];
-          lineMap[lineKey][out.name].push({book:bm.title, am:out.price, dec:dec, point:out.point});
+          if(!sigMap[sig][out.name]) sigMap[sig][out.name] = [];
+          sigMap[sig][out.name].push({book:bm.title, am:out.price, dec:dec, point:(out.point !== undefined ? out.point : null)});
         });
       });
     });
-    // Devig and find EV per line
-    Object.keys(lineMap).forEach(function(lineKey){
-      var bbo = lineMap[lineKey];
+    Object.keys(sigMap).forEach(function(sig){
+      var bbo = sigMap[sig];
       var names = Object.keys(bbo);
       if(names.length < 2) return;
       var result = evMethod==='pinnacle' ? devigPinnacleFirst(bbo)

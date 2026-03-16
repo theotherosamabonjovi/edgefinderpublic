@@ -183,8 +183,8 @@ select.sf option{background:var(--s2)}
       <div class="hint">Free key at <b>the-odds-api.com</b> (500 req/month).<br>Paste the full key — no spaces before or after.</div>
     </div>
 
-    <div class="msec">
-      <div class="msec-t">Kalshi API</div>
+    <div class="msec" style="border:1px solid var(--b2);border-radius:8px;padding:14px;background:var(--s3)">
+      <div class="msec-t" style="color:var(--grn)">Kalshi API</div>
       <div class="fgrp">
         <div class="f">
           <label>API Key</label>
@@ -195,7 +195,7 @@ select.sf option{background:var(--s2)}
         <button class="btn2" style="flex:1;cursor:pointer" onclick="testKalshiKey()">&#9654; Test Key</button>
         <span id="kalshiTestResult" style="font-size:10px;color:var(--txd)">—</span>
       </div>
-      <div class="hint">Get your key at <b>kalshi.com</b> → Account → API Access.<br>Leave blank to use public (unauthenticated) data only.</div>
+      <div class="hint" style="margin-top:8px">Get your key at <b>kalshi.com</b> → Account → API Access.<br>Leave blank to use public (unauthenticated) data only.</div>
     </div>
 
     <div class="msec">
@@ -240,7 +240,7 @@ select.sf option{background:var(--s2)}
   <!-- SIDEBAR -->
   <aside class="sb">
 
-    <div class="sb-sec">
+    <div class="sb-sec" id="oddsApiSection">
       <div class="sec-lbl">Odds API</div>
       <div class="inp-row">
         <div class="inp-lbl">Scope</div>
@@ -330,8 +330,20 @@ select.sf option{background:var(--s2)}
       </div>
     </div>
 
+    <div class="sb-sec">
+      <div class="sec-lbl">Scan Scope</div>
+      <div class="inp-row">
+        <div class="inp-lbl">What to scan</div>
+        <select class="sf" id="scanScope" onchange="onScopeChange(this.value)">
+          <option value="all">Everything (Odds + Kalshi)</option>
+          <option value="odds">Odds API only</option>
+          <option value="kalshi">Kalshi only</option>
+        </select>
+      </div>
+    </div>
+
     <button class="scan-btn" id="scanBtn" onclick="runScan()">&#9654; SCAN MARKETS</button>
-    <button class="aux-btn" onclick="loadSports()">&#8635; Load Sports List</button>
+    <button class="aux-btn" id="loadSportsBtn" onclick="loadSports()">&#8635; Load Sports List</button>
 
   </aside>
 
@@ -503,6 +515,16 @@ function updateStatus(){
   var sdK = document.getElementById('sdK'), stK = document.getElementById('stK');
   if(cfg.kalshiKey){ sdK.className='sd ok'; stK.textContent='Kalshi: key saved'; }
   else { sdK.className='sd'; stK.textContent='Kalshi: public (no key)'; }
+}
+
+// ── SCAN SCOPE ───────────────────────────────────────────────────────────
+function onScopeChange(scope){
+  var oddsOnly = scope === 'kalshi';
+  // Hide Odds-API-specific controls when scanning Kalshi only
+  ['oddsApiSection','loadSportsBtn'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.style.display = oddsOnly ? 'none' : '';
+  });
 }
 
 // ── TABS ─────────────────────────────────────────────────────────────────
@@ -924,32 +946,58 @@ async function fetchAllSports(mkt, concurrency){
 // ── MAIN SCAN ────────────────────────────────────────────────────────────
 async function runScan(){
   if(scanning) return;
-  var mkt = document.getElementById('mktSel').value;
-  // fix #13: isNaN guard so 0 is a valid threshold
+  var scope  = document.getElementById('scanScope').value; // 'all' | 'odds' | 'kalshi'
+  var mkt    = document.getElementById('mktSel').value;
   var minEVRaw  = parseFloat(document.getElementById('minEV').value);
   var minArbRaw = parseFloat(document.getElementById('minArb').value);
   var minEV  = isNaN(minEVRaw)  ? 3   : minEVRaw;
   var minA   = isNaN(minArbRaw) ? 0.1 : minArbRaw;
   var concur = parseInt(document.getElementById('concurrency').value) || 4;
-  if(!cfg.key){ toast('Set Odds API key in Settings first','warn'); openSet(); return; }
-  if(appData.sports.length===0){ toast('Click "Load Sports List" first','warn'); return; }
+
+  // Validate requirements per scope
+  var needOdds   = scope === 'all' || scope === 'odds';
+  var needKalshi = scope === 'all' || scope === 'kalshi';
+  if(needOdds && !cfg.key){
+    toast('Set your Odds API key in Settings first','warn'); openSet(); return;
+  }
+  if(needOdds && appData.sports.length===0){
+    toast('Click "Load Sports List" first','warn'); return;
+  }
+
   scanning = true;
-  // fix #8: clear oppReg before each scan to prevent memory leak
-  oppReg = {};
-  oppCounter = 0;
+  oppReg = {}; oppCounter = 0;
   var btn = document.getElementById('scanBtn');
   btn.disabled=true; btn.classList.add('loading');
   btn.innerHTML='<span class="spin"></span>Scanning…';
+
   try{
-    var results = await Promise.all([fetchAllSports(mkt, concur), fetchKalshi()]);
-    var events = results[0], kRaw = results[1];
-    appData.arb     = findArb(events, minA);
-    appData.ev      = findEV(events, minEV);
-    appData.kalshi  = processKalshi(kRaw);
+    var events = [], kRaw = [];
+    if(needOdds && needKalshi){
+      var results = await Promise.all([fetchAllSports(mkt, concur), fetchKalshi()]);
+      events = results[0]; kRaw = results[1];
+    } else if(needOdds){
+      events = await fetchAllSports(mkt, concur);
+    } else {
+      // Kalshi only — jump straight to Kalshi tab
+      kRaw = await fetchKalshi();
+      setTab('kalshi');
+    }
+
+    if(needOdds){
+      appData.arb = findArb(events, minA);
+      appData.ev  = findEV(events, minEV);
+    }
+    if(needKalshi){
+      appData.kalshi = processKalshi(kRaw);
+    }
+
     renderArb(); renderEV(); renderKalshi();
     updateStats();
     document.getElementById('lastScan').textContent = 'Last scan: '+new Date().toLocaleTimeString();
-    toast('Scan done — '+appData.arb.length+' arb · '+appData.ev.length+' +EV', 'ok');
+    var summary = [];
+    if(needOdds)   summary.push(appData.arb.length+' arb · '+appData.ev.length+' +EV');
+    if(needKalshi) summary.push(appData.kalshi.length+' Kalshi markets');
+    toast('Scan done — '+summary.join(' · '), 'ok');
   }catch(e){ toast('Scan error: '+e.message, 'err'); }
   finally{
     scanning=false; btn.disabled=false; btn.classList.remove('loading');
@@ -1100,6 +1148,7 @@ function init(){
   loadCfg(); updateStatus();
   document.getElementById('minEV').value  = cfg.minEV;
   document.getElementById('minArb').value = cfg.minArb;
+  onScopeChange(document.getElementById('scanScope').value);
   document.getElementById('setModal').addEventListener('click', function(e){
     if(e.target === this) closeSet();
   });

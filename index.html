@@ -715,7 +715,9 @@ function findArb(events, minPct){
     });
     var sumImp = names.reduce(function(s,n){ return s+best[n].imp; }, 0);
     var pct = (1-sumImp)*100;
-    if(pct >= minPct){
+    // Hard floor: sumImp must be strictly < 1.0 (true guaranteed profit).
+    // minPct only filters how small an arb to show — never allows loss.
+    if(pct > 0 && pct >= minPct){
       opps.push({
         type:'arb', event:ev.home_team+' vs '+ev.away_team,
         sport:ev.sport_key, time:ev.commence_time,

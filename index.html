@@ -196,7 +196,8 @@ select.sf option{background:var(--s2)}
 
 /* ── MOBILE SIDEBAR TOGGLE ── */
 .mob-menu-btn{display:none}
-.sb-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:200;opacity:0;transition:opacity .25s;pointer-events:none}
+/* Backdrop sits above main content (z:2) but below sidebar (z:300) and header (z:100) */
+.sb-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:150;opacity:0;transition:opacity .25s;pointer-events:none}
 .sb-backdrop.on{opacity:1;pointer-events:all}
 
 /* ── RESPONSIVE ── */
@@ -206,13 +207,15 @@ select.sf option{background:var(--s2)}
   .quota{display:none}
   .sb-backdrop{display:block}
 
-  /* Sidebar becomes a fixed left drawer */
-  .grid{grid-template-columns:1fr;height:auto;min-height:calc(100vh - 52px - 48px)}
+  /* Single column — sidebar is fixed so it's out of flow */
+  .grid{grid-template-columns:1fr;position:static;z-index:auto;height:auto;min-height:calc(100vh - 52px - 48px)}
+
+  /* Sidebar becomes a fixed left drawer — z:300 ensures it's above backdrop(150) and header(100) */
   .sb{
     position:fixed;top:52px;left:0;bottom:48px;
     width:82vw;max-width:300px;
     background:var(--s1);border-right:1px solid var(--b2);
-    z-index:210;overflow-y:auto;
+    z-index:300;overflow-y:auto;
     transform:translateX(-110%);transition:transform .25s ease;
     padding:16px 14px;
   }
@@ -223,7 +226,6 @@ select.sf option{background:var(--s2)}
 
   /* Status bar taller on mobile for better readability */
   .sbar{height:48px;flex-wrap:wrap;row-gap:2px;padding:6px 12px}
-  .grid{height:auto}
 
   /* Tables: horizontal scroll */
   .res-inner{padding:10px 8px;overflow-x:auto}
@@ -447,8 +449,8 @@ select.sf option{background:var(--s2)}
       </div>
     </div>
 
-    <button class="scan-btn" id="scanBtn" onclick="runScan()">&#9654; SCAN MARKETS</button>
-    <button class="aux-btn" id="loadSportsBtn" onclick="loadSports()">&#8635; Load Sports List</button>
+    <button class="scan-btn" id="scanBtn" onclick="runScanMobile()">&#9654; SCAN MARKETS</button>
+    <button class="aux-btn" id="loadSportsBtn" onclick="loadSportsMobile()">&#8635; Load Sports List</button>
 
   </aside>
 
@@ -661,6 +663,10 @@ function closeSidebar(){
   sb.classList.remove('open');
   if(bd) bd.classList.remove('on');
 }
+// Close sidebar on mobile after triggering a scan or sports load
+function isMobile(){return window.innerWidth<=700;}
+function runScanMobile(){if(isMobile())closeSidebar();runScan();}
+function loadSportsMobile(){if(isMobile())closeSidebar();loadSports();}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // SETTINGS

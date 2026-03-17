@@ -2,10 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<!-- CSP NOTE: 'unsafe-inline' for scripts has been removed. Because this is a single-file app,
-     the ideal fix is to move all JS to an external .js file served with a server-side nonce or
-     hash-based CSP header. The meta CSP below is enforced while that migration is pending. -->
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.the-odds-api.com; img-src 'none'; object-src 'none';">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.the-odds-api.com; img-src 'none'; object-src 'none';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EdgeFinder — Arb & +EV Scanner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">

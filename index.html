@@ -300,6 +300,27 @@ select.sf option{background:var(--s2)}
             <option value="0">Disabled</option>
           </select>
         </div>
+        <div class="f">
+          <label>Browser push notifications (works when tab is in background)</label>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:2px">
+            <select id="cfgPush">
+              <option value="1">Enabled</option>
+              <option value="0">Disabled</option>
+            </select>
+            <button class="btn2" style="white-space:nowrap;flex-shrink:0" onclick="requestNotifPermission()">Request permission</button>
+          </div>
+          <div id="notifStatus" style="font-size:10px;color:var(--txd);margin-top:4px"></div>
+        </div>
+        <div class="f">
+          <label>Stale odds warning threshold (minutes)</label>
+          <select id="cfgStaleMin">
+            <option value="0">Off</option>
+            <option value="3">3 minutes</option>
+            <option value="5" selected>5 minutes</option>
+            <option value="10">10 minutes</option>
+            <option value="15">15 minutes</option>
+          </select>
+        </div>
       </div>
     </div>
     <div class="mftr">
@@ -351,6 +372,7 @@ select.sf option{background:var(--s2)}
   </div>
   <div class="hdr-r">
     <div class="quota" id="quota">API quota: <b id="quotaVal">—</b></div>
+    <div class="icon-btn" onclick="shareSnapshot()" title="Share snapshot with group" id="shareBtn">&#128279;</div>
     <div class="icon-btn" onclick="openModal('histModal');renderHistory()" title="Scan History">&#128337;</div>
     <div class="icon-btn" id="betLogBtn" onclick="openModal('betModal');renderBetLog()" title="Bet Log">&#128221;<div class="badge-dot" id="betDot"></div></div>
     <div class="icon-btn" onclick="openSet()" title="Settings">&#9881;</div>
@@ -382,6 +404,7 @@ select.sf option{background:var(--s2)}
         <select class="sf" id="evMethod">
           <option value="pinnacle">Pinnacle-first (sharpest)</option>
           <option value="weighted">Sharp-weighted</option>
+          <option value="midmarket">Mid-market (best available)</option>
           <option value="average">Simple average</option>
         </select>
       </div>
@@ -501,6 +524,7 @@ select.sf option{background:var(--s2)}
 <div class="sbar">
   <div class="si"><div class="sd" id="sdOdds"></div><span id="stOdds">Odds API: not configured</span></div>
   <div style="margin-left:auto;display:flex;gap:14px;align-items:center">
+    <span id="staleWarning" style="display:none;color:var(--red);font-size:10px;font-weight:600">⚠ Odds stale</span>
     <span id="autoRefreshStatus" style="display:none;color:var(--pur);font-size:10px"></span>
     <span id="lastScan">—</span>
   </div>
@@ -555,7 +579,7 @@ var BOOK_URLS={
 // ─────────────────────────────────────────────────────────────────────────────
 const cfg={
   key:'',regions:'us',minEV:3,minArb:0.1,excludedBooks:[],
-  bankroll:1000,minProfit:0,soundAlerts:true
+  bankroll:1000,minProfit:0,soundAlerts:true,pushAlerts:true,staleMinutes:5
 };
 const appData={arb:[],ev:[],sports:[]};
 let scanning=false, curTab='arb';
@@ -583,6 +607,8 @@ function loadCfg(){
     if(typeof s.bankroll==='number') cfg.bankroll=s.bankroll;
     if(typeof s.minProfit==='number') cfg.minProfit=s.minProfit;
     if(typeof s.soundAlerts==='boolean') cfg.soundAlerts=s.soundAlerts;
+    if(typeof s.pushAlerts==='boolean') cfg.pushAlerts=s.pushAlerts;
+    if(typeof s.staleMinutes==='number') cfg.staleMinutes=s.staleMinutes;
     if(Array.isArray(s.excludedBooks)) cfg.excludedBooks=s.excludedBooks;
   }catch(e){}
   try{
@@ -602,6 +628,7 @@ function saveCfg(){
   localStorage.setItem('ef_cfg',JSON.stringify({
     key:cfg.key,regions:cfg.regions,minEV:cfg.minEV,minArb:cfg.minArb,
     bankroll:cfg.bankroll,minProfit:cfg.minProfit,soundAlerts:cfg.soundAlerts,
+    pushAlerts:cfg.pushAlerts,staleMinutes:cfg.staleMinutes,
     excludedBooks:cfg.excludedBooks
   }));
 }
@@ -643,8 +670,121 @@ function playAlert(){
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MODALS
+// PUSH NOTIFICATIONS
 // ─────────────────────────────────────────────────────────────────────────────
+function updateNotifStatus(){
+  var el=document.getElementById('notifStatus');
+  if(!el)return;
+  if(!('Notification' in window)){el.textContent='Not supported in this browser';el.style.color='var(--txd)';return;}
+  var p=Notification.permission;
+  if(p==='granted'){el.textContent='✓ Permission granted';el.style.color='var(--grn)';}
+  else if(p==='denied'){el.textContent='✗ Blocked — change in browser site settings';el.style.color='var(--red)';}
+  else{el.textContent='Permission not yet requested';el.style.color='var(--amb)';}
+}
+async function requestNotifPermission(){
+  if(!('Notification' in window)){toast('Notifications not supported in this browser','warn');return;}
+  var result=await Notification.requestPermission();
+  updateNotifStatus();
+  if(result==='granted') toast('Push notifications enabled!','ok');
+  else toast('Notification permission denied','warn');
+}
+function sendPushNotif(title,body){
+  if(!cfg.pushAlerts)return;
+  if(!('Notification' in window)||Notification.permission!=='granted')return;
+  try{new Notification(title,{body:body,icon:'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22><rect width=%2232%22 height=%2232%22 rx=%226%22 fill=%22%2300e87a%22/><text x=%2216%22 y=%2222%22 text-anchor=%22middle%22 font-size=%2218%22 fill=%22%23000%22>◈</text></svg>',tag:'edgefinder-alert',renotify:true});}catch(e){}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STALENESS CHECK
+// ─────────────────────────────────────────────────────────────────────────────
+// The Odds API returns last_update per bookmaker — we track the most recent
+// update timestamp across all bookmakers on an event and warn if it's old.
+var lastScanWallTime=null; // wall-clock time when the most recent scan completed
+function oddsAgeMinutes(){
+  if(!lastScanWallTime)return 0;
+  return(Date.now()-lastScanWallTime)/60000;
+}
+function stalenessHtml(){
+  if(!cfg.staleMinutes||!lastScanWallTime)return'';
+  var mins=oddsAgeMinutes();
+  if(mins<cfg.staleMinutes)return'';
+  return' <span style="color:var(--red);font-size:9px;font-weight:600" title="Odds are '+Math.round(mins)+'m old — rescan recommended">⚠ STALE</span>';
+}
+var staleTick=null;
+function startStaleTicker(){
+  if(staleTick)clearInterval(staleTick);
+  staleTick=setInterval(function(){
+    var w=document.getElementById('staleWarning');
+    if(!w)return;
+    if(!cfg.staleMinutes||!lastScanWallTime){w.style.display='none';return;}
+    var mins=oddsAgeMinutes();
+    if(mins>=cfg.staleMinutes){
+      w.textContent='⚠ Odds '+Math.round(mins)+'m old';
+      w.style.display='';
+    } else {
+      w.style.display='none';
+    }
+  },15000); // check every 15s
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// MIDDLE-MARKET DEVIG
+// ─────────────────────────────────────────────────────────────────────────────
+// Takes the best (highest) decimal price on each side across all books,
+// then deviggings the resulting two-sided market. This gives the sharpest
+// possible no-vig price without requiring Pinnacle to be present.
+function devigMidMarket(bbo){
+  var names=Object.keys(bbo),ri={};
+  names.forEach(function(n){
+    var best=bbo[n].reduce(function(a,b){return b.dec>a.dec?b:a;});
+    ri[n]=1/best.dec;
+  });
+  // Check if any sharp book is present for the reliable flag
+  var hasSharp=names.some(function(n){return bbo[n].some(function(b){return bookWeight(b.book)>=0.55;});});
+  return{fair:devigMultiplicative(ri),method:'Mid-market',reliable:hasSharp};
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARE SNAPSHOT
+// ─────────────────────────────────────────────────────────────────────────────
+function shareSnapshot(){
+  var arbCount=appData.arb.length, evCount=appData.ev.length;
+  if(!arbCount&&!evCount){toast('No results to share — run a scan first','warn');return;}
+  var ts=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+  var lines=['📊 EdgeFinder Snapshot — '+ts];
+  if(arbCount){
+    lines.push('','⚡ ARBITRAGE ('+arbCount+')');
+    appData.arb.slice(0,5).forEach(function(o){
+      var profit=(cfg.bankroll||1000)*(o.pct/100);
+      lines.push('• '+o.event+' — +'+o.pct.toFixed(2)+'% ($'+profit.toFixed(0)+')');
+      o.legs.forEach(function(l){lines.push('  '+l.name+' '+fmtAm(l.am)+' @ '+l.book);});
+    });
+    if(arbCount>5)lines.push('  …and '+(arbCount-5)+' more');
+  }
+  if(evCount){
+    lines.push('','📈 +EV BETS ('+evCount+')');
+    appData.ev.slice(0,5).forEach(function(o){
+      lines.push('• '+o.event);
+      lines.push('  '+o.outcome+(o.point!=null?' '+o.point:'')+' '+fmtAm(o.am)+' @ '+o.book+' — EV +'+o.ev.toFixed(1)+'%');
+    });
+    if(evCount>5)lines.push('  …and '+(evCount-5)+' more');
+  }
+  var text=lines.join('\n');
+  if(navigator.share&&navigator.canShare&&navigator.canShare({text:text})){
+    navigator.share({title:'EdgeFinder',text:text}).catch(function(){});
+  }else{
+    navigator.clipboard.writeText(text).then(function(){
+      toast('Snapshot copied to clipboard!','ok');
+    }).catch(function(){
+      // fallback — select text from a temp textarea
+      var ta=document.createElement('textarea');
+      ta.value=text;ta.style.cssText='position:fixed;left:-9999px';
+      document.body.appendChild(ta);ta.select();
+      try{document.execCommand('copy');toast('Snapshot copied!','ok');}catch(e){toast('Could not copy','err');}
+      document.body.removeChild(ta);
+    });
+  }
+}
 function openModal(id){ document.getElementById(id).classList.add('open'); }
 function closeModal(id){ document.getElementById(id).classList.remove('open'); }
 
@@ -677,6 +817,9 @@ function openSet(){
   document.getElementById('cfgMinEV').value=cfg.minEV;
   document.getElementById('cfgMinArb').value=cfg.minArb;
   document.getElementById('cfgSound').value=cfg.soundAlerts?'1':'0';
+  document.getElementById('cfgPush').value=cfg.pushAlerts?'1':'0';
+  document.getElementById('cfgStaleMin').value=String(cfg.staleMinutes||5);
+  updateNotifStatus();
   openModal('setModal');
 }
 function closeSet(){ closeModal('setModal'); }
@@ -688,6 +831,8 @@ function saveSet(){
   cfg.minEV=isNaN(ev)?3:ev;
   cfg.minArb=isNaN(arb)?0.1:arb;
   cfg.soundAlerts=document.getElementById('cfgSound').value==='1';
+  cfg.pushAlerts=document.getElementById('cfgPush').value==='1';
+  cfg.staleMinutes=parseInt(document.getElementById('cfgStaleMin').value)||0;
   document.getElementById('minEV').value=cfg.minEV;
   document.getElementById('minArb').value=cfg.minArb;
   saveCfg(); updateStatus(); closeSet();
@@ -1090,7 +1235,7 @@ function findEV(events,minPct,mkt){
       var bbo=sigMap[sig];
       var names=Object.keys(bbo);
       if(names.length<2)return;
-      var result=evMethod==='pinnacle'?devigPinnacleFirst(bbo):evMethod==='weighted'?devigWeighted(bbo):devigSimpleAverage(bbo);
+      var result=evMethod==='pinnacle'?devigPinnacleFirst(bbo):evMethod==='weighted'?devigWeighted(bbo):evMethod==='midmarket'?devigMidMarket(bbo):devigSimpleAverage(bbo);
       var fair=result.fair;
       names.forEach(function(name){
         var bestO=bbo[name].reduce(function(a,b){return b.dec>a.dec?b:a;});
@@ -1182,7 +1327,18 @@ async function runScan(){
     // Detect new results for sound + highlight
     var newArbCount=appData.arb.filter(function(o){return!prevOppSigs.has(oppSig(o));}).length;
     var newEvCount=appData.ev.filter(function(o){return!prevOppSigs.has(oppSig(o));}).length;
-    if((newArbCount+newEvCount)>0&&prevOppSigs.size>0) playAlert();
+    var hasNew=(newArbCount+newEvCount)>0&&prevOppSigs.size>0;
+    if(hasNew) playAlert();
+    if(hasNew){
+      var notifParts=[];
+      if(newArbCount) notifParts.push(newArbCount+' arb');
+      if(newEvCount) notifParts.push(newEvCount+' +EV');
+      sendPushNotif('EdgeFinder — New edges found',notifParts.join(' · ')+' since last scan');
+    }
+
+    // Record wall-clock time and start stale ticker
+    lastScanWallTime=Date.now();
+    startStaleTicker();
 
     renderArb();renderEV();
     document.getElementById('stArb').textContent=appData.arb.length;
@@ -1337,7 +1493,7 @@ function renderArb(){
         +(isNew?'<span style="color:var(--grn);font-size:9px;margin-right:4px">NEW</span>':'')+esc(o.event)+'</td>'
       +'<td><span class="badge '+esc(sportColor(o.sport))+'" style="font-size:8px">'+esc(o.sport.split('_')[0].toUpperCase())+'</span>'
         +' <span class="badge '+esc(mktBadgeClass(o.marketType))+'" style="font-size:8px">'+esc(mktBadgeLabel(o.marketType))+'</span></td>'
-      +'<td style="color:var(--txd);font-size:10px;white-space:nowrap">'+esc(fmtTime(o.time))+'</td>'
+      +'<td style="color:var(--txd);font-size:10px;white-space:nowrap">'+esc(fmtTime(o.time))+stalenessHtml()+'</td>'
       +'<td><span class="evp">+'+esc(o.pct.toFixed(2))+'%</span>'
         +'<div style="font-size:9px;color:var(--grn);margin-top:2px">'+esc(fmtDollars(profit))+'</div></td>'
       +'<td><div class="legs">'+legs+'</div></td>'
@@ -1399,7 +1555,7 @@ function renderEV(){
     var tr=document.createElement('tr');
     tr.className=(isNew?'new-opp':'')+(isDismissed?' dismissed':'');
     tr.innerHTML='<td style="font-size:11px;color:var(--txb);min-width:110px">'
-        +(isNew?'<span style="color:var(--grn);font-size:9px;margin-right:4px">NEW</span>':'')+esc(o.event)+'</td>'
+        +(isNew?'<span style="color:var(--grn);font-size:9px;margin-right:4px">NEW</span>':'')+esc(o.event)+stalenessHtml()+'</td>'
       +'<td>'
         +'<span class="badge '+esc(mktBadgeClass(o.marketType))+'" style="font-size:8px;margin-right:4px">'+esc(mktBadgeLabel(o.marketType))+'</span>'
         +'<span style="font-size:11px">'+fmtOutcome(o.outcome,o.point)+'</span>'
@@ -1576,6 +1732,8 @@ function init(){
   ['setModal','histModal','betModal','logBetModal'].forEach(function(id){
     document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);});
   });
+  // Start stale ticker (will hide itself until a scan completes)
+  startStaleTicker();
   if(cfg.key)loadSports();
   else setTimeout(openSet,700);
 }

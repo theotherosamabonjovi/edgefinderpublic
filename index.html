@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.the-odds-api.com; img-src 'none'; object-src 'none';">
+<!-- CSP NOTE: 'unsafe-inline' for scripts has been removed. Because this is a single-file app,
+     the ideal fix is to move all JS to an external .js file served with a server-side nonce or
+     hash-based CSP header. The meta CSP below is enforced while that migration is pending. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; connect-src https://api.the-odds-api.com; img-src 'none'; object-src 'none';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>EdgeFinder — Arb & +EV Scanner</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -501,7 +504,10 @@ let pendingLogBet=null; // opp object waiting to be confirmed
 function loadCfg(){
   try{
     var s=JSON.parse(localStorage.getItem('ef_cfg')||'{}');
-    if(typeof s.key==='string') cfg.key=s.key;
+    // API key is stored in sessionStorage only (cleared when tab closes) to limit exposure
+    var sessionKey=sessionStorage.getItem('ef_key')||'';
+    if(typeof s.key==='string'&&!sessionKey) cfg.key=s.key; // migrate legacy key once
+    if(sessionKey) cfg.key=sessionKey;
     if(typeof s.regions==='string') cfg.regions=s.regions;
     if(typeof s.minEV==='number') cfg.minEV=s.minEV;
     if(typeof s.minArb==='number') cfg.minArb=s.minArb;
@@ -524,8 +530,10 @@ function loadCfg(){
   }catch(e){}
 }
 function saveCfg(){
+  // Store API key in sessionStorage only (not persisted after tab close)
+  sessionStorage.setItem('ef_key',cfg.key);
   localStorage.setItem('ef_cfg',JSON.stringify({
-    key:cfg.key,regions:cfg.regions,minEV:cfg.minEV,minArb:cfg.minArb,
+    key:'',regions:cfg.regions,minEV:cfg.minEV,minArb:cfg.minArb,
     bankroll:cfg.bankroll,minProfit:cfg.minProfit,soundAlerts:cfg.soundAlerts,
     excludedBooks:cfg.excludedBooks
   }));
@@ -551,6 +559,7 @@ function playAlert(){
   if(!cfg.soundAlerts) return;
   try{
     var ctx=new(window.AudioContext||window.webkitAudioContext)();
+    var lastStop=0;
     [[523,0],[659,0.18]].forEach(function(p){
       var osc=ctx.createOscillator(), gain=ctx.createGain();
       osc.connect(gain); gain.connect(ctx.destination);
@@ -559,7 +568,10 @@ function playAlert(){
       gain.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+p[1]+0.28);
       osc.start(ctx.currentTime+p[1]);
       osc.stop(ctx.currentTime+p[1]+0.3);
+      lastStop=ctx.currentTime+p[1]+0.3;
     });
+    // Close the context shortly after the last note ends to free resources
+    setTimeout(function(){ctx.close().catch(function(){});},Math.ceil(lastStop*1000)+100);
   }catch(e){}
 }
 
@@ -626,7 +638,7 @@ function updateStatus(){
   var sdO=document.getElementById('sdOdds'),stO=document.getElementById('stOdds');
   if(cfg.key){sdO.className='sd ok';stO.textContent='Odds API: configured';}
   else{sdO.className='sd err';stO.textContent='Odds API: no key';}
-  document.getElementById('betDot').className='badge-dot'+(loggedBets.length?'on':'');
+  document.getElementById('betDot').className='badge-dot'+(loggedBets.length?' on':'');
 }
 function setAutoRefresh(secs){
   autoRefreshInterval=parseInt(secs)||0;
@@ -1178,7 +1190,7 @@ function exportCSV(tab){
     headers=['Event','Sport','Market','Time','Arb%','Profit$','Leg1 Outcome','Leg1 Odds','Leg1 Book','Leg1 Stake$','Leg2 Outcome','Leg2 Odds','Leg2 Book','Leg2 Stake$'];
     rows=appData.arb.map(function(o){
       var profit=(bankroll*(o.pct/100)).toFixed(2);
-      var base=[esc(o.event),o.sport,o.marketType||'',fmtTime(o.time),o.pct.toFixed(3),profit];
+      var base=[o.event,o.sport,o.marketType||'',fmtTime(o.time),o.pct.toFixed(3),profit];
       o.legs.forEach(function(l,i){if(i<2){base.push(l.name+(l.point!=null?' '+l.point:''),fmtAm(l.am),l.book,fmtDollars(bankroll*(parseFloat(l.stake)/100)));}});
       while(base.length<headers.length)base.push('');
       return base;
@@ -1243,12 +1255,22 @@ function renderArb(){
         +'<div style="font-size:9px;color:var(--grn);margin-top:2px">'+esc(fmtDollars(profit))+'</div></td>'
       +'<td><div class="legs">'+legs+'</div></td>'
       +'<td><div class="row-actions">'
-        +'<button class="act-btn log" onclick="openLogBet(\'arb\',\''+esc(sig)+'\')">Log</button>'
+        +'<button class="act-btn log" data-action="log" data-tab="arb">Log</button>'
         +(isDismissed
-          ?'<button class="act-btn" onclick="undismissOpp(\''+esc(sig)+'\')">Restore</button>'
-          :'<button class="act-btn hide-btn" onclick="dismissOpp(\''+esc(sig)+'\')">Hide</button>')
+          ?'<button class="act-btn" data-action="undismiss">Restore</button>'
+          :'<button class="act-btn hide-btn" data-action="dismiss">Hide</button>')
         +'</div></td>';
     tbody.appendChild(tr);
+    // Attach event listeners via data attributes — avoids onclick string injection (XSS fix)
+    tr.querySelectorAll('[data-action]').forEach(function(btn){
+      btn.dataset.sig=sig;
+      btn.addEventListener('click',function(){
+        var action=this.dataset.action, s=this.dataset.sig;
+        if(action==='log') openLogBet('arb',s);
+        else if(action==='dismiss') dismissOpp(s);
+        else if(action==='undismiss') undismissOpp(s);
+      });
+    });
   });
   var table=document.createElement('table');table.className='dt';
   table.innerHTML='<thead><tr><th>Event</th><th>Type</th><th>Time</th><th>Arb %</th><th>Legs</th><th></th></tr></thead>';
@@ -1305,12 +1327,22 @@ function renderEV(){
       +'<td><span class="badge '+esc(evB)+'">+'+esc(o.ev.toFixed(1))+'%</span></td>'
       +'<td style="color:var(--amb);font-size:10px">'+esc(o.kelly.toFixed(1))+'%<div style="font-size:9px;color:var(--txb)">'+esc(fmtDollars(kellyDollar))+'</div></td>'
       +'<td><div class="row-actions">'
-        +'<button class="act-btn log" onclick="openLogBet(\'ev\',\''+esc(sig)+'\')">Log</button>'
+        +'<button class="act-btn log" data-action="log" data-tab="ev">Log</button>'
         +(isDismissed
-          ?'<button class="act-btn" onclick="undismissOpp(\''+esc(sig)+'\')">Restore</button>'
-          :'<button class="act-btn hide-btn" onclick="dismissOpp(\''+esc(sig)+'\')">Hide</button>')
+          ?'<button class="act-btn" data-action="undismiss">Restore</button>'
+          :'<button class="act-btn hide-btn" data-action="dismiss">Hide</button>')
         +'</div></td>';
     tbody.appendChild(tr);
+    // Attach event listeners via data attributes — avoids onclick string injection (XSS fix)
+    tr.querySelectorAll('[data-action]').forEach(function(btn){
+      btn.dataset.sig=sig;
+      btn.addEventListener('click',function(){
+        var action=this.dataset.action, s=this.dataset.sig;
+        if(action==='log') openLogBet('ev',s);
+        else if(action==='dismiss') dismissOpp(s);
+        else if(action==='undismiss') undismissOpp(s);
+      });
+    });
   });
   var table=document.createElement('table');table.className='dt';
   table.innerHTML='<thead><tr><th>Event</th><th>Outcome</th><th>Book</th><th>Odds</th><th>Fair</th><th>EV %</th><th>¼ Kelly</th><th></th></tr></thead>';
@@ -1331,11 +1363,11 @@ function openLogBet(tab,sig){
   var bankroll=cfg.bankroll||1000;
   if(tab==='arb'){
     var lines=['<b>'+esc(opp.event)+'</b>','Arb: +'+opp.pct.toFixed(2)+'% | Profit: '+fmtDollars(bankroll*(opp.pct/100)),''];
-    opp.legs.forEach(function(l){lines.push(esc(l.name)+(l.point!=null?' '+l.point:'')+' @ '+fmtAm(l.am)+' — '+l.book+' — stake '+fmtDollars(bankroll*(parseFloat(l.stake)/100)));});
+    opp.legs.forEach(function(l){lines.push(esc(l.name)+(l.point!=null?' '+esc(String(l.point)):'')+' @ '+esc(fmtAm(l.am))+' — '+esc(l.book)+' — stake '+fmtDollars(bankroll*(parseFloat(l.stake)/100)));});
     preview.innerHTML=lines.join('<br>');
   }else{
     var kd=fmtDollars(bankroll*(opp.kelly/100));
-    preview.innerHTML='<b>'+esc(opp.event)+'</b><br>'+esc(opp.outcome)+(opp.point!=null?' '+opp.point:'')+'<br>Book: '+esc(opp.book)+' @ '+esc(fmtAm(opp.am))+'<br>EV: +'+opp.ev.toFixed(1)+'% | ¼ Kelly: '+opp.kelly.toFixed(1)+'% ('+kd+')';
+    preview.innerHTML='<b>'+esc(opp.event)+'</b><br>'+esc(opp.outcome)+(opp.point!=null?' '+esc(String(opp.point)):'')+' @ '+esc(fmtAm(opp.am))+'<br>Book: '+esc(opp.book)+' @ '+esc(fmtAm(opp.am))+'<br>EV: +'+opp.ev.toFixed(1)+'% | ¼ Kelly: '+opp.kelly.toFixed(1)+'% ('+kd+')';
   }
   document.getElementById('logBetNotes').value='';
   openModal('logBetModal');
@@ -1388,14 +1420,19 @@ function renderBetLog(){
     var statusHtml=b.stillLive?'<span class="bet-status live">Still live</span>':'<span class="bet-status moved">Line moved</span>';
     var details='';
     if(b.tab==='arb'){
-      details='Arb: +'+b.pct.toFixed(2)+'%<br>'+b.legs.map(function(l){return esc(l.name)+(l.point!=null?' ('+l.point+')':'')+' @ '+esc(fmtAm(l.am))+' — '+esc(l.book);}).join('<br>');
+      details='Arb: +'+b.pct.toFixed(2)+'%<br>'+b.legs.map(function(l){return esc(l.name)+(l.point!=null?' ('+esc(String(l.point))+')':'')+' @ '+esc(fmtAm(l.am))+' — '+esc(l.book);}).join('<br>');
     }else{
-      details=esc(b.outcome)+(b.point!=null?' ('+b.point+')':'')+' @ '+esc(fmtAm(b.am))+' ('+esc(b.book)+') — EV +'+b.ev.toFixed(1)+'%';
+      details=esc(b.outcome)+(b.point!=null?' ('+esc(String(b.point))+')':'')+' @ '+esc(fmtAm(b.am))+' ('+esc(b.book)+') — EV +'+b.ev.toFixed(1)+'%';
       if(b.currentAm&&b.stillLive)details+='<br><span style="color:var(--txd);font-size:9px">Current best: '+esc(fmtAm(b.currentAm))+'</span>';
     }
     if(b.notes)details+='<br><span style="color:var(--txd);font-size:9px">Note: '+esc(b.notes)+'</span>';
     div.innerHTML='<div class="bet-hdr"><div><div class="bet-event">'+esc(b.event)+'</div><div class="bet-meta">'+esc(ts)+' · '+esc(b.marketType||'')+'</div></div>'+statusHtml+'</div><div style="font-size:10px;line-height:1.7;color:var(--tx)">'+details+'</div>'
-      +'<div style="margin-top:6px"><button class="act-btn" style="font-size:9px" onclick="removeBet(\''+esc(b.id)+'\')">Remove</button></div>';
+      +'<div style="margin-top:6px"><button class="act-btn" style="font-size:9px" data-action="remove">Remove</button></div>';
+    // Attach remove listener via data attribute — avoids onclick string injection (XSS fix)
+    div.querySelector('[data-action="remove"]').dataset.betId=b.id;
+    div.querySelector('[data-action="remove"]').addEventListener('click',function(){
+      removeBet(this.dataset.betId);
+    });
     pn.appendChild(div);
   });
 }

@@ -501,10 +501,7 @@ let pendingLogBet=null; // opp object waiting to be confirmed
 function loadCfg(){
   try{
     var s=JSON.parse(localStorage.getItem('ef_cfg')||'{}');
-    // API key is stored in sessionStorage only (cleared when tab closes) to limit exposure
-    var sessionKey=sessionStorage.getItem('ef_key')||'';
-    if(typeof s.key==='string'&&!sessionKey) cfg.key=s.key; // migrate legacy key once
-    if(sessionKey) cfg.key=sessionKey;
+    if(typeof s.key==='string') cfg.key=s.key;
     if(typeof s.regions==='string') cfg.regions=s.regions;
     if(typeof s.minEV==='number') cfg.minEV=s.minEV;
     if(typeof s.minArb==='number') cfg.minArb=s.minArb;
@@ -527,10 +524,8 @@ function loadCfg(){
   }catch(e){}
 }
 function saveCfg(){
-  // Store API key in sessionStorage only (not persisted after tab close)
-  sessionStorage.setItem('ef_key',cfg.key);
   localStorage.setItem('ef_cfg',JSON.stringify({
-    key:'',regions:cfg.regions,minEV:cfg.minEV,minArb:cfg.minArb,
+    key:cfg.key,regions:cfg.regions,minEV:cfg.minEV,minArb:cfg.minArb,
     bankroll:cfg.bankroll,minProfit:cfg.minProfit,soundAlerts:cfg.soundAlerts,
     excludedBooks:cfg.excludedBooks
   }));

@@ -533,7 +533,7 @@ select.sf option{background:var(--s2)}
     <div class="tabs">
       <div class="tab act" onclick="setTab('arb')" id="tab-arb">&#9889; Arbitrage <span class="tb" id="tb-arb">0</span></div>
       <div class="tab" onclick="setTab('ev')" id="tab-ev">&#128200; +EV Bets <span class="tb" id="tb-ev">0</span></div>
-      <div class="tab" onclick="setTab('eval')" id="tab-eval">&#127891; Evaluator</div>
+      <div class="tab" onclick="setTab('calc')" id="tab-calc">&#128181; Odds Calc</div>
     </div>
 
     <!-- ARB PANEL -->
@@ -570,109 +570,62 @@ select.sf option{background:var(--s2)}
         <div class="empty"><div class="empty-ico">&#128200;</div><div class="empty-t">No +EV bets found yet</div><div class="empty-s">Uses Pinnacle no-vig as the fair line.</div></div>
       </div></div>
     </div>
-    <!-- EVALUATOR PANEL -->
-    <div id="pn-eval" style="display:none;flex-direction:column;flex:1;overflow:hidden">
-      <div class="res"><div class="res-inner" id="eval-content">
+    <!-- ODDS CALCULATOR PANEL -->
+    <div id="pn-calc" style="display:none;flex-direction:column;flex:1;overflow:hidden">
+      <div class="res"><div class="res-inner">
+        <div style="max-width:480px;margin:0 auto">
 
-        <div style="max-width:560px;margin:0 auto">
-
-          <!-- intro -->
-          <div style="margin-bottom:18px;padding:12px 14px;background:var(--s2);border:1px solid var(--b2);border-radius:8px;font-size:11px;line-height:1.7;color:var(--txm)">
-            <span style="color:var(--txb);font-weight:600">New to sports betting?</span>
-            Paste any odds below and we'll explain exactly what they mean, whether the bet has value, and how much to stake. No scan required.
-          </div>
-
-          <!-- STEP 1 — Your bet -->
+          <!-- Inputs -->
           <div class="eval-card">
-            <div class="eval-step">Step 1 — Enter your bet</div>
-            <div class="eval-row">
+            <div class="eval-step">Odds Calculator</div>
+            <div class="eval-row" style="gap:12px;margin-bottom:12px">
               <div class="eval-field">
-                <label class="eval-lbl">Odds (American format)</label>
-                <input type="number" id="evalOdds" class="sf" placeholder="-110" oninput="evalUpdate()">
-                <div class="eval-hint" id="evalOddsHint">e.g. -110 means favourite, +150 means underdog</div>
+                <label class="eval-lbl">American Odds</label>
+                <input type="number" id="calcOdds" class="sf" placeholder="-110" oninput="calcUpdate()">
+                <div class="eval-hint" id="calcOddsHint" style="font-size:10px;color:var(--txd);margin-top:3px">e.g. -110 or +150</div>
               </div>
               <div class="eval-field">
-                <label class="eval-lbl">Your stake ($)</label>
-                <input type="number" id="evalStake" class="sf" placeholder="100" value="100" min="1" oninput="evalUpdate()">
+                <label class="eval-lbl">Stake ($)</label>
+                <input type="number" id="calcStake" class="sf" placeholder="100" value="100" min="1" oninput="calcUpdate()">
               </div>
             </div>
-            <!-- Live translation box -->
-            <div id="evalTranslation" class="eval-translation" style="display:none"></div>
+
+            <!-- Live result -->
+            <div id="calcResult" style="display:none">
+              <div id="calcPayout" style="background:var(--s3);border:1px solid var(--b1);border-radius:7px;padding:14px 16px;margin-bottom:10px">
+                <!-- filled by JS -->
+              </div>
+              <div class="eval-stats-grid" id="calcStatsGrid" style="grid-template-columns:repeat(3,1fr)"></div>
+            </div>
+
+            <div id="calcPlaceholder" style="font-size:11px;color:var(--txd);padding:6px 0">
+              Enter odds above to see the payout.
+            </div>
           </div>
 
-          <!-- STEP 2 — Fair odds -->
+          <!-- Quick-convert -->
           <div class="eval-card">
-            <div class="eval-step">Step 2 — What are the fair odds? <span style="color:var(--txd);font-weight:400;font-size:9px">(optional but needed for EV)</span></div>
-            <div style="font-size:10px;color:var(--txm);margin-bottom:10px;line-height:1.6">
-              "Fair odds" are what the line <em>should</em> be with no bookmaker margin baked in. You can enter them manually, or if you've run a scan we'll try to find this game automatically.
-            </div>
-            <div class="eval-row">
+            <div class="eval-step">Odds Converter</div>
+            <div style="font-size:10px;color:var(--txm);margin-bottom:10px">Enter any format — the others update instantly.</div>
+            <div class="eval-row" style="gap:10px">
               <div class="eval-field">
-                <label class="eval-lbl">Fair odds (American) — opposite side</label>
-                <input type="number" id="evalFairOdds" class="sf" placeholder="-110" oninput="evalUpdate()">
+                <label class="eval-lbl">American</label>
+                <input type="number" id="convAm" class="sf" placeholder="-110" oninput="convFrom('am')">
               </div>
-              <div class="eval-field" style="display:flex;flex-direction:column;justify-content:flex-end">
-                <button class="aux-btn" onclick="evalPullFromScan()" style="font-size:10px;padding:8px">&#128269; Pick from scan results</button>
+              <div class="eval-field">
+                <label class="eval-lbl">Decimal</label>
+                <input type="number" id="convDec" class="sf" placeholder="1.91" step="0.01" oninput="convFrom('dec')">
               </div>
-            </div>
-            <div id="evalPullStatus" style="font-size:10px;color:var(--txd);margin-top:4px"></div>
-          </div>
-
-          <!-- RESULTS -->
-          <div id="evalResults" style="display:none">
-
-            <!-- Verdict banner -->
-            <div id="evalVerdict" class="eval-verdict"></div>
-
-            <!-- Stats grid -->
-            <div class="eval-stats-grid" id="evalStatsGrid"></div>
-
-            <!-- Plain-English breakdown -->
-            <div id="evalExplainer" class="eval-card" style="font-size:11px;line-height:1.9;color:var(--tx)"></div>
-
-          </div>
-
-          <!-- GLOSSARY -->
-          <div class="eval-card" style="margin-top:8px">
-            <div class="eval-step" style="cursor:pointer;user-select:none" onclick="toggleGlossary()">
-              &#128218; Glossary — click to expand
-              <span id="glossaryArrow" style="float:right;color:var(--txd)">▾</span>
-            </div>
-            <div id="glossaryBody" style="display:none;margin-top:12px;display:none">
-              <div class="gloss-item">
-                <div class="gloss-t">American Odds</div>
-                <div class="gloss-d">Negative numbers (e.g. -150) show how much you must bet to win $100. Positive numbers (e.g. +130) show how much a $100 bet wins. -110 is the most common line — it's how bookmakers take their cut.</div>
-              </div>
-              <div class="gloss-item">
-                <div class="gloss-t">Implied Probability</div>
-                <div class="gloss-d">The win probability baked into the odds by the bookmaker. -110 implies a 52.4% chance of winning. Because both sides add up to more than 100%, the extra is the bookmaker's profit margin (the "vig").</div>
-              </div>
-              <div class="gloss-item">
-                <div class="gloss-t">Vig / Juice / Overround</div>
-                <div class="gloss-d">The bookmaker's built-in profit margin. A fair coin flip is 50/50 but a book might price both sides at -110 (52.4% each = 104.8% total). That extra 4.8% is the vig — it means you're paying a tax on every bet.</div>
-              </div>
-              <div class="gloss-item">
-                <div class="gloss-t">Expected Value (EV)</div>
-                <div class="gloss-d">The average profit or loss per dollar bet, calculated using the true win probability. A +5% EV bet means you'd expect to make $5 profit for every $100 wagered over many bets. Negative EV means you lose money long-term even if you win sometimes.</div>
-              </div>
-              <div class="gloss-item">
-                <div class="gloss-t">Breakeven Win Rate</div>
-                <div class="gloss-d">The minimum percentage of the time you need to win just to avoid losing money. At -110 odds you need to win 52.4% of the time to break even. If you think you'll win more often than that, the bet has value.</div>
-              </div>
-              <div class="gloss-item">
-                <div class="gloss-t">Kelly Criterion</div>
-                <div class="gloss-d">A formula that calculates the mathematically optimal stake size based on your edge and bankroll. Betting too little leaves money on the table; betting too much risks ruin. We show ¼ Kelly — a conservative version used by professional bettors.</div>
-              </div>
-              <div class="gloss-item">
-                <div class="gloss-t">No-Vig (Fair) Line</div>
-                <div class="gloss-d">The odds with the bookmaker's profit margin removed. If a book has Team A at -110 and Team B at -110, the no-vig line for both sides is -100 (50/50). Comparing where you're betting to the no-vig line tells you how much value you're getting or giving away.</div>
+              <div class="eval-field">
+                <label class="eval-lbl">Implied %</label>
+                <input type="number" id="convPct" class="sf" placeholder="52.4" step="0.1" oninput="convFrom('pct')">
               </div>
             </div>
           </div>
 
-        </div><!-- /max-width wrapper -->
+        </div>
       </div></div>
-    </div><!-- /pn-eval -->
+    </div><!-- /pn-calc -->
   </main>
 </div>
 
@@ -1110,242 +1063,100 @@ function updateCountdown(){
 // ─────────────────────────────────────────────────────────────────────────────
 function setTab(t){
   curTab=t;
-  ['arb','ev','eval'].forEach(function(x){
+  ['arb','ev','calc'].forEach(function(x){
     document.getElementById('tab-'+x).classList.toggle('act',x===t);
     document.getElementById('pn-'+x).style.display=x===t?'flex':'none';
   });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// BET EVALUATOR
+// ODDS CALCULATOR
 // ─────────────────────────────────────────────────────────────────────────────
-function evalUpdate(){
-  var oddsRaw=document.getElementById('evalOdds').value.trim();
-  var stakeRaw=parseFloat(document.getElementById('evalStake').value)||100;
-  var fairRaw=document.getElementById('evalFairOdds').value.trim();
+function calcUpdate(){
+  var oddsRaw=document.getElementById('calcOdds').value.trim();
+  var stake=parseFloat(document.getElementById('calcStake').value)||100;
+  var resultEl=document.getElementById('calcResult');
+  var placeholderEl=document.getElementById('calcPlaceholder');
+  var hintEl=document.getElementById('calcOddsHint');
 
   var odds=parseFloat(oddsRaw);
-  var hintEl=document.getElementById('evalOddsHint');
-  var transEl=document.getElementById('evalTranslation');
-  var resultsEl=document.getElementById('evalResults');
-
-  // Reset if no valid odds
   if(!oddsRaw||isNaN(odds)||odds===0||odds===-1||odds===1){
-    transEl.style.display='none';
-    resultsEl.style.display='none';
+    resultEl.style.display='none'; placeholderEl.style.display='';
     hintEl.textContent='e.g. -110 means favourite, +150 means underdog';
-    hintEl.style.color='var(--txd)';
-    return;
+    hintEl.style.color='var(--txd)'; return;
   }
+  if(odds>0&&odds<100){hintEl.textContent='Positive odds must be 100 or greater';hintEl.style.color='var(--red)';resultEl.style.display='none';placeholderEl.style.display='';return;}
+  if(odds<0&&odds>-100){hintEl.textContent='Negative odds must be -100 or lower';hintEl.style.color='var(--red)';resultEl.style.display='none';placeholderEl.style.display='';return;}
+  hintEl.textContent=''; hintEl.style.color='var(--txd)';
 
-  // Validate range
-  if(odds>0&&odds<100){hintEl.textContent='Positive odds must be 100 or greater (e.g. +150)';hintEl.style.color='var(--red)';transEl.style.display='none';resultsEl.style.display='none';return;}
-  if(odds<0&&odds>-100){hintEl.textContent='Negative odds must be -100 or lower (e.g. -110)';hintEl.style.color='var(--red)';transEl.style.display='none';resultsEl.style.display='none';return;}
-
-  hintEl.textContent='';
   var dec=toDecimal(odds);
-  var impliedProb=1/dec;
-  var toWin=(stakeRaw*(dec-1));
-  var totalReturn=stakeRaw*dec;
+  var profit=stake*(dec-1);
+  var total=stake*dec;
+  var impliedPct=(1/dec)*100;
+  var isFav=odds<0;
 
-  // ── Translation ──
-  var transLines=[];
-  if(odds<0){
-    transLines.push('<b>'+fmtAm(odds)+'</b> means this is the <b>favourite</b>.');
-    transLines.push('You must bet <b>'+fmtDollars(stakeRaw)+'</b> to win <b>'+fmtDollars(toWin)+'</b> profit (total back: '+fmtDollars(totalReturn)+').');
-  } else {
-    transLines.push('<b>+'+odds+'</b> means this is the <b>underdog</b>.');
-    transLines.push('A <b>'+fmtDollars(stakeRaw)+'</b> bet wins <b>'+fmtDollars(toWin)+'</b> profit (total back: '+fmtDollars(totalReturn)+').');
+  // Main payout display
+  var payoutEl=document.getElementById('calcPayout');
+  payoutEl.innerHTML=
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">'
+      +'<div>'
+        +'<div style="font-size:11px;color:var(--txm);margin-bottom:4px">'+(isFav?'Favourite':'Underdog')+' · '+esc(fmtAm(odds))+'</div>'
+        +'<div style="font-size:11px;color:var(--txm)">Stake <b style="color:var(--txb)">'+fmtDollars(stake)+'</b></div>'
+      +'</div>'
+      +'<div style="text-align:right">'
+        +'<div style="font-size:24px;font-weight:700;color:var(--grn);line-height:1">'+fmtDollars(profit)+'</div>'
+        +'<div style="font-size:10px;color:var(--txd)">profit</div>'
+      +'</div>'
+    +'</div>'
+    +'<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--b1);font-size:12px;color:var(--txb)">'
+      +'Total payout (stake + profit): <b>'+fmtDollars(total)+'</b>'
+    +'</div>';
+
+  // Stats
+  function statCell(val,lbl,col){
+    return'<div class="eval-stat"><div class="eval-stat-v" style="color:'+(col||'var(--txb)')+'">'+val+'</div><div class="eval-stat-l">'+lbl+'</div></div>';
   }
-  transLines.push('The bookmaker implies a <b>'+(impliedProb*100).toFixed(1)+'%</b> chance of winning.');
-  transEl.innerHTML=transLines.join('<br>');
-  transEl.style.display='block';
+  document.getElementById('calcStatsGrid').innerHTML=
+    statCell(impliedPct.toFixed(1)+'%','Implied prob','var(--txm)')+
+    statCell(dec.toFixed(3),'Decimal odds','var(--txm)')+
+    statCell(isFav?'Must bet '+fmtDollars(Math.abs(odds))+' to win $100':'$100 wins '+fmtDollars(odds),'What it means','var(--txd)');
 
-  // ── Fair-odds / EV section ──
-  var fairOdds=parseFloat(fairRaw);
-  var hasFair=fairRaw&&!isNaN(fairOdds)&&(fairOdds>=100||(fairOdds<=-100));
-
-  if(!hasFair){
-    resultsEl.style.display='none';
-    return;
-  }
-
-  // Devig the two-sided market (your odds + the other side's fair odds)
-  // We treat the entered fair odds as the opposing side for a 2-way market
-  var oppDec=toDecimal(fairOdds);
-  // Build raw implied probs and devig multiplicatively
-  var rawYou=impliedProb;
-  var rawOpp=1/oppDec;
-  var total=rawYou+rawOpp;
-  var fairProb=rawYou/total; // your true fair probability
-  var fairDec=1/fairProb;
-  var fairAm=toAmerican(fairDec);
-
-  var ev=(fairProb*dec-1)*100;
-  var kelly=fairProb>0&&dec>1?Math.max(0,(fairProb-(1-fairProb)/(dec-1))*100*0.25):0;
-  var kellyDollar=(cfg.bankroll||1000)*(kelly/100);
-  var breakeven=(1/dec)*100;
-  var vig=(total-1)*100;
-
-  // ── Stats grid ──
-  var statsGrid=document.getElementById('evalStatsGrid');
-  function statCell(val,lbl,sub,color){
-    return'<div class="eval-stat"><div class="eval-stat-v" style="color:'+(color||'var(--txb)')+'">'+val+'</div><div class="eval-stat-l">'+lbl+'</div>'+(sub?'<div class="eval-stat-sub">'+sub+'</div>':'')+'</div>';
-  }
-  statsGrid.innerHTML=
-    statCell((fairProb*100).toFixed(1)+'%','True win prob','after removing vig',ev>=0?'var(--grn)':'var(--amb)')+
-    statCell((ev>=0?'+':'')+ev.toFixed(2)+'%','Expected value','per $100 wagered',ev>=3?'var(--grn)':ev>=0?'var(--blu)':'var(--red)')+
-    statCell(kelly>0?kelly.toFixed(1)+'%':'—','¼ Kelly stake',kelly>0?fmtDollars(kellyDollar):''+(cfg.bankroll||1000)+' bankroll','var(--amb)')+
-    statCell(breakeven.toFixed(1)+'%','Breakeven rate','win % needed to not lose','var(--txm)')+
-    statCell(esc(fmtAm(fairAm)),'No-vig line','true fair odds','var(--txm)')+
-    statCell(vig.toFixed(1)+'%','Vig (book margin)','extra % book charges','var(--txd)');
-
-  // ── Verdict ──
-  var verdictEl=document.getElementById('evalVerdict');
-  var icon,cls,headline,sub;
-  if(ev>=5){
-    icon='🟢';cls='vgood';
-    headline='Strong +EV bet — good value';
-    sub='Expected profit: '+(ev>=0?'+':'')+ev.toFixed(1)+'% per $100 · Fair line: '+fmtAm(fairAm);
-  } else if(ev>=1){
-    icon='🔵';cls='vok';
-    headline='Slight edge — marginal value';
-    sub='Small positive EV. Worth betting at Kelly sizing. Fair line: '+fmtAm(fairAm);
-  } else if(ev>=-2){
-    icon='🟡';cls='vwarn';
-    headline='Close to fair — thin or no edge';
-    sub='EV is near zero. The book\'s price is roughly fair. Proceed with caution.';
-  } else {
-    icon='🔴';cls='vbad';
-    headline='Negative EV — book has the edge';
-    sub='Expected loss: '+ev.toFixed(1)+'% per $100. Over many bets this loses money.';
-  }
-  verdictEl.className='eval-verdict '+cls;
-  verdictEl.innerHTML='<div class="eval-verdict-icon">'+icon+'</div><div class="eval-verdict-body"><div>'+headline+'</div><div class="eval-verdict-sub">'+sub+'</div></div>';
-
-  // ── Plain-English explainer ──
-  var exEl=document.getElementById('evalExplainer');
-  var lines=[];
-  lines.push('<b>What this bet means:</b> You are paying <b>'+fmtDollars(stakeRaw)+'</b> for a chance to win <b>'+fmtDollars(toWin)+'</b>. The bookmaker thinks you\'ll win '+breakeven.toFixed(1)+'% of the time — that\'s what the odds imply.');
-  lines.push('');
-  lines.push('<b>Is there value?</b> After removing the bookmaker\'s margin of <b>'+vig.toFixed(1)+'%</b>, the true estimated probability of winning is <b>'+(fairProb*100).toFixed(1)+'%</b>. ');
-  if(ev>=1){
-    lines.push('Since the true probability (<b>'+(fairProb*100).toFixed(1)+'%</b>) is higher than what the odds imply (<b>'+breakeven.toFixed(1)+'%</b>), this bet has <b style="color:var(--grn)">positive expected value</b>. Long-term, bets like this make money.');
-  } else if(ev>=-2){
-    lines.push('The true probability (<b>'+(fairProb*100).toFixed(1)+'%</b>) is very close to what the odds imply. There is little edge here either way.');
-  } else {
-    lines.push('Since the true probability (<b>'+(fairProb*100).toFixed(1)+'%</b>) is <em>lower</em> than what the odds imply (<b>'+breakeven.toFixed(1)+'%</b>), this bet has <b style="color:var(--red)">negative expected value</b>. Long-term, bets like this lose money.');
-  }
-  lines.push('');
-  if(kelly>0){
-    lines.push('<b>How much to bet?</b> The ¼ Kelly formula suggests staking <b>'+kelly.toFixed(1)+'%</b> of your bankroll — that\'s <b>'+fmtDollars(kellyDollar)+'</b> on a '+fmtDollars(cfg.bankroll||1000)+' bankroll. Betting more increases risk of large losses even on +EV bets.');
-  } else {
-    lines.push('<b>Stake recommendation:</b> With no positive edge, the Kelly formula recommends a <b>$0</b> stake — meaning don\'t bet this at these odds.');
-  }
-  exEl.innerHTML=lines.join('\n');
-
-  resultsEl.style.display='block';
+  resultEl.style.display=''; placeholderEl.style.display='none';
 }
 
-function evalPullFromScan(){
-  var statusEl=document.getElementById('evalPullStatus');
-  var evOpps=appData.ev||[];
-  var arbOpps=appData.arb||[];
-
-  if(!evOpps.length&&!arbOpps.length){
-    statusEl.innerHTML='<span style="color:var(--red)">No scan results yet — run a scan first, then come back.</span>';
-    return;
-  }
-
-  // Build a flat list of pickable items with all the info we need
-  var items=[];
-  evOpps.forEach(function(o){
-    items.push({
-      label:o.event+' — '+o.outcome+(o.point!=null?' '+o.point:'')+' @ '+fmtAm(o.am)+' ('+o.book+') EV+'+o.ev.toFixed(1)+'%',
-      odds:o.am,
-      fairAm:o.fairAm,
-      type:'ev'
-    });
-  });
-  arbOpps.forEach(function(o){
-    o.legs.forEach(function(l){
-      // For arb legs the fair odds = the sum-implied-prob no-vig price
-      // fairDec = 1 / (l.imp / o.sumImp * 1) — already = 1/l.imp
-      var fairDec=1/(o.sumImp/o.legs.length); // rough per-leg fair
-      // Better: use the actual implied prob for this leg
-      var legFairDec=1/l.imp;
-      var legFairAm=toAmerican(legFairDec);
-      items.push({
-        label:o.event+' — '+l.name+(l.point!=null?' '+l.point:'')+' @ '+fmtAm(l.am)+' ('+l.book+') ARB+'+o.pct.toFixed(2)+'%',
-        odds:l.am,
-        fairAm:legFairAm,
-        type:'arb'
-      });
-    });
-  });
-
-  // Build a dropdown picker inline
-  var pickerId='evalScanPicker';
-  var existing=document.getElementById(pickerId);
-  if(existing){existing.parentNode.removeChild(existing);}
-
-  var wrap=document.createElement('div');
-  wrap.id=pickerId;
-  wrap.style.cssText='margin-top:8px;background:var(--s3);border:1px solid var(--b2);border-radius:6px;padding:10px;max-height:200px;overflow-y:auto';
-
-  var searchInp=document.createElement('input');
-  searchInp.type='text';
-  searchInp.placeholder='Search events…';
-  searchInp.className='sf';
-  searchInp.style.cssText='width:100%;margin-bottom:8px;font-size:12px;padding:6px 8px';
-  wrap.appendChild(searchInp);
-
-  var list=document.createElement('div');
-  list.style.cssText='display:flex;flex-direction:column;gap:3px';
-  wrap.appendChild(list);
-
-  function renderList(filter){
-    list.innerHTML='';
-    var filtered=items.filter(function(it){
-      return!filter||it.label.toLowerCase().indexOf(filter.toLowerCase())!==-1;
-    });
-    if(!filtered.length){
-      list.innerHTML='<div style="color:var(--txd);font-size:10px;padding:4px 0">No matches</div>';
-      return;
+// Odds converter — update the other two fields when one changes
+var convUpdating=false;
+function convFrom(src){
+  if(convUpdating)return;
+  convUpdating=true;
+  try{
+    var amEl=document.getElementById('convAm');
+    var decEl=document.getElementById('convDec');
+    var pctEl=document.getElementById('convPct');
+    var dec;
+    if(src==='am'){
+      var am=parseFloat(amEl.value);
+      if(isNaN(am)||am===0){decEl.value='';pctEl.value='';return;}
+      dec=toDecimal(am);
+      decEl.value=dec?dec.toFixed(3):'';
+      pctEl.value=dec?(100/dec).toFixed(2):'';
+    } else if(src==='dec'){
+      dec=parseFloat(decEl.value);
+      if(isNaN(dec)||dec<=1){amEl.value='';pctEl.value='';return;}
+      amEl.value=toAmerican(dec);
+      pctEl.value=(100/dec).toFixed(2);
+    } else {
+      var pct=parseFloat(pctEl.value);
+      if(isNaN(pct)||pct<=0||pct>=100){amEl.value='';decEl.value='';return;}
+      dec=100/pct;
+      decEl.value=dec.toFixed(3);
+      amEl.value=toAmerican(dec);
     }
-    filtered.slice(0,30).forEach(function(it){
-      var btn=document.createElement('button');
-      btn.className='aux-btn';
-      btn.style.cssText='text-align:left;font-size:10px;padding:5px 8px;white-space:normal;line-height:1.4;width:100%';
-      btn.textContent=it.label;
-      btn.addEventListener('click',function(){
-        document.getElementById('evalOdds').value=it.odds;
-        document.getElementById('evalFairOdds').value=it.fairAm;
-        statusEl.innerHTML='<span style="color:var(--grn)">✓ Loaded: '+esc(it.label)+'</span>';
-        wrap.parentNode.removeChild(wrap);
-        evalUpdate();
-      });
-      list.appendChild(btn);
-    });
-    if(filtered.length>30){
-      list.innerHTML+='<div style="color:var(--txd);font-size:9px;padding:4px 0">'+filtered.length+' results — type to filter</div>';
-    }
-  }
-
-  renderList('');
-  searchInp.addEventListener('input',function(){renderList(this.value);});
-  statusEl.innerHTML='';
-  statusEl.after ? statusEl.after(wrap) : statusEl.parentNode.insertBefore(wrap,statusEl.nextSibling);
-  searchInp.focus();
+  }finally{convUpdating=false;}
 }
 
-function toggleGlossary(){
-  var body=document.getElementById('glossaryBody');
-  var arrow=document.getElementById('glossaryArrow');
-  var open=body.style.display==='none'||body.style.display==='';
-  body.style.display=open?'block':'none';
-  arrow.textContent=open?'▴':'▾';
-}
+
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MATH

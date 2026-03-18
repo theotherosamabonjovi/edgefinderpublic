@@ -432,11 +432,18 @@ select.sf option{background:var(--s2)}
 
     <div class="sb-sec">
       <div class="sec-lbl">Odds API</div>
-      <div class="inp-row"><div class="inp-lbl">Scope</div>
-        <select class="sf" id="sportSel"><option value="__all__">All Sports (scan everything)</option></select>
-      </div>
       <div class="inp-row"><div class="inp-lbl">Sport Group Filter</div>
-        <select class="sf" id="sportGroup"><option value="">No filter — all groups</option></select>
+        <select class="sf" id="sportGroup" onchange="filterSportList()"><option value="">All groups</option></select>
+      </div>
+      <div class="inp-row">
+        <div class="inp-lbl">Sports <span id="sportSelCount" style="color:var(--txd)"></span></div>
+        <div id="sportSelList" class="book-filter-list" style="max-height:160px">
+          <div style="font-size:10px;color:var(--txd)">Load sports list to populate</div>
+        </div>
+        <div class="book-filter-btns">
+          <button onclick="setAllSports(true)">All on</button>
+          <button onclick="setAllSports(false)">All off</button>
+        </div>
       </div>
       <div class="inp-row"><div class="inp-lbl">Market Type</div>
         <select class="sf" id="mktSel">
@@ -728,7 +735,8 @@ var BOOK_URLS={
 // ─────────────────────────────────────────────────────────────────────────────
 const cfg={
   key:'',regions:'us',minEV:3,minArb:0.1,excludedBooks:[],
-  bankroll:1000,minProfit:0,soundAlerts:true,pushAlerts:true,staleMinutes:5
+  bankroll:1000,minProfit:0,soundAlerts:true,pushAlerts:true,staleMinutes:5,
+  selectedSports:[]
 };
 const appData={arb:[],ev:[],sports:[]};
 let scanning=false, curTab='arb';
@@ -758,6 +766,7 @@ function loadCfg(){
     if(typeof s.soundAlerts==='boolean') cfg.soundAlerts=s.soundAlerts;
     if(typeof s.pushAlerts==='boolean') cfg.pushAlerts=s.pushAlerts;
     if(typeof s.staleMinutes==='number') cfg.staleMinutes=s.staleMinutes;
+    if(Array.isArray(s.selectedSports)) cfg.selectedSports=s.selectedSports;
     if(Array.isArray(s.excludedBooks)) cfg.excludedBooks=s.excludedBooks;
   }catch(e){}
   try{
@@ -778,6 +787,7 @@ function saveCfg(){
     key:cfg.key,regions:cfg.regions,minEV:cfg.minEV,minArb:cfg.minArb,
     bankroll:cfg.bankroll,minProfit:cfg.minProfit,soundAlerts:cfg.soundAlerts,
     pushAlerts:cfg.pushAlerts,staleMinutes:cfg.staleMinutes,
+    selectedSports:cfg.selectedSports,
     excludedBooks:cfg.excludedBooks
   }));
 }
@@ -1394,18 +1404,35 @@ async function loadSports(){
   try{
     var sports=await oddsApiFetch('https://api.the-odds-api.com/v4/sports?all=false');
     appData.sports=sports;
-    var sel=document.getElementById('sportSel');
-    sel.innerHTML='<option value="__all__">All Sports (scan everything)</option>';
+
+    // Populate group filter dropdown
     var grps={};
     sports.forEach(function(s){if(!grps[s.group])grps[s.group]=[];grps[s.group].push(s);});
     var grpSel=document.getElementById('sportGroup');
-    grpSel.innerHTML='<option value="">No filter — all groups</option>';
-    Object.keys(grps).forEach(function(g){var o=document.createElement('option');o.value=g;o.textContent=g+' ('+grps[g].length+')';grpSel.appendChild(o);});
-    Object.entries(grps).forEach(function(e){
-      var og=document.createElement('optgroup');og.label=e[0];
-      e[1].forEach(function(s){var o=document.createElement('option');o.value=s.key;o.textContent=s.title;og.appendChild(o);});
-      sel.appendChild(og);
+    grpSel.innerHTML='<option value="">All groups</option>';
+    Object.keys(grps).sort().forEach(function(g){
+      var o=document.createElement('option');o.value=g;o.textContent=g+' ('+grps[g].length+')';grpSel.appendChild(o);
     });
+
+    // Build checkbox list — restore saved selections, default all checked
+    buildSportList(sports,'');
+    // If we have saved selections, apply them
+    if(cfg.selectedSports&&cfg.selectedSports.length>0){
+      var list=document.getElementById('sportSelList');
+      if(list){
+        list.querySelectorAll('input[type=checkbox]').forEach(function(cb){
+          var key=cb.dataset.sportKey;
+          if(key){
+            var checked=cfg.selectedSports.indexOf(key)!==-1;
+            cb.checked=checked;
+            var item=cb.closest('label');
+            if(item) item.classList.toggle('excluded',!checked);
+          }
+        });
+      }
+    }
+    updateSportSelCount();
+
     document.getElementById('scanProgressMsg').textContent=sports.length+' sports loaded. Ready to scan.';
     toast('Loaded '+sports.length+' sports','ok');
     document.getElementById('sdOdds').className='sd ok';
@@ -1415,6 +1442,118 @@ async function loadSports(){
     document.getElementById('sdOdds').className='sd err';
     document.getElementById('stOdds').textContent='Odds API error';
   }finally{btn.textContent='↻ Load Sports List';btn.disabled=false;}
+}
+
+function buildSportList(sports,groupFilter){
+  var list=document.getElementById('sportSelList');
+  if(!list)return;
+  list.innerHTML='';
+  var filtered=groupFilter?sports.filter(function(s){return s.group===groupFilter;}):sports;
+  if(!filtered.length){list.innerHTML='<div style="font-size:10px;color:var(--txd)">No sports in this group</div>';return;}
+
+  // Group them visually
+  var grps={};
+  filtered.forEach(function(s){if(!grps[s.group])grps[s.group]=[];grps[s.group].push(s);});
+  Object.keys(grps).sort().forEach(function(g){
+    // Group header (only show if showing multiple groups)
+    if(!groupFilter){
+      var hdr=document.createElement('div');
+      hdr.style.cssText='font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--txd);padding:5px 0 2px;margin-top:2px';
+      hdr.textContent=g;
+      list.appendChild(hdr);
+    }
+    grps[g].forEach(function(s){
+      var noneSelected=cfg.selectedSports.length>0&&cfg.selectedSports[0]==='__none__';
+      var enabled=!noneSelected&&(cfg.selectedSports.length===0||cfg.selectedSports.indexOf(s.key)!==-1);
+      var item=document.createElement('label');
+      item.className='book-item'+(enabled?'':' excluded');
+      item.dataset.sportKey=s.key;
+      var cb=document.createElement('input');cb.type='checkbox';cb.checked=enabled;cb.dataset.sportKey=s.key;
+      cb.addEventListener('change',function(){
+        item.classList.toggle('excluded',!this.checked);
+        syncSelectedSportsFromCheckboxes();
+        saveCfg();
+        updateSportSelCount();
+      });
+      var span=document.createElement('span');span.textContent=s.title;
+      item.appendChild(cb);item.appendChild(span);list.appendChild(item);
+    });
+  });
+}
+
+function filterSportList(){
+  var g=document.getElementById('sportGroup').value;
+  buildSportList(appData.sports,g);
+  updateSportSelCount();
+}
+
+function updateSportSelCount(){
+  var el=document.getElementById('sportSelCount');
+  if(!el)return;
+  var total=appData.sports.length;
+  if(!total){el.textContent='';return;}
+  // getCheckedSportKeys returns the full set (all keys if cfg.selectedSports is empty)
+  var selected=getCheckedSportKeys().length;
+  el.textContent='('+selected+'/'+total+')';
+  el.style.color=selected===total?'var(--txd)':'var(--grn)';
+}
+
+function syncSelectedSportsFromCheckboxes(){
+  var list=document.getElementById('sportSelList');
+  if(!list) return;
+
+  // Keys currently visible in the list (may be filtered to a group)
+  var visibleKeys=[];
+  list.querySelectorAll('input[type=checkbox]').forEach(function(cb){
+    if(cb.dataset.sportKey) visibleKeys.push(cb.dataset.sportKey);
+  });
+
+  // Keys that are checked among visible items
+  var checkedVisible=[];
+  list.querySelectorAll('input[type=checkbox]:checked').forEach(function(cb){
+    if(cb.dataset.sportKey) checkedVisible.push(cb.dataset.sportKey);
+  });
+
+  // Keys that were already selected but are NOT currently visible (different group)
+  var currentSelected=cfg.selectedSports.length===0
+    ? appData.sports.map(function(s){return s.key;})  // "all" means all keys
+    : cfg.selectedSports.slice();
+
+  var hiddenSelected=currentSelected.filter(function(k){return visibleKeys.indexOf(k)===-1;});
+
+  // Merge: hidden selections stay, visible selections replaced by current checkbox state
+  var merged=hiddenSelected.concat(checkedVisible);
+
+  // If everything is now selected, store [] (= "all") to keep things clean
+  cfg.selectedSports=(merged.length===appData.sports.length)?[]:merged;
+}
+
+function getCheckedSportKeys(){
+  if(!cfg.selectedSports||cfg.selectedSports.length===0){
+    // Empty = all sports selected
+    return appData.sports.map(function(s){return s.key;});
+  }
+  if(cfg.selectedSports[0]==='__none__'){
+    // Sentinel = nothing selected
+    return[];
+  }
+  return cfg.selectedSports.slice();
+}
+
+function setAllSports(enabled){
+  // Update cfg directly for all sports (not just the visible filtered subset)
+  cfg.selectedSports=enabled?[]:['__none__']; // [] = all on; ['__none__'] = all off sentinel
+  // Reflect in the visible checkboxes
+  var list=document.getElementById('sportSelList');
+  if(list){
+    list.querySelectorAll('input[type=checkbox]').forEach(function(cb){
+      cb.checked=enabled;
+      var item=cb.closest('label');
+      if(item) item.classList.toggle('excluded',!enabled);
+    });
+  }
+  saveCfg();
+  updateSportSelCount();
 }
 
 async function fetchOdds(sportKey,mkt){
@@ -1641,16 +1780,13 @@ function findEV(events,minPct,mkt){
 // BATCH FETCH
 // ─────────────────────────────────────────────────────────────────────────────
 async function fetchAllSports(mkt,concurrency){
-  var sportSel=document.getElementById('sportSel').value;
-  var groupFilter=document.getElementById('sportGroup').value;
-  var sports;
-  if(sportSel==='__all__'||!sportSel){
-    sports=appData.sports.filter(function(s){return!groupFilter||s.group===groupFilter;});
-  }else{
-    var found=appData.sports.find(function(s){return s.key===sportSel;});
-    sports=found?[found]:[];
+  var checkedKeys=getCheckedSportKeys();
+  var sports=appData.sports.filter(function(s){return checkedKeys.indexOf(s.key)!==-1;});
+  if(!sports.length){
+    if(!appData.sports.length) toast('Load Sports List first','warn');
+    else toast('No sports selected — tick at least one sport','warn');
+    return[];
   }
-  if(!sports.length){if(!appData.sports.length)toast('Load Sports List first','warn');return[];}
   var allEvents=[],done=0,prog=document.getElementById('scanProgressMsg');
   for(var i=0;i<sports.length;i+=concurrency){
     var batch=sports.slice(i,i+concurrency);

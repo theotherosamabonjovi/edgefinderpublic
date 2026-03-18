@@ -1455,22 +1455,60 @@ function buildSportList(sports,groupFilter){
   var grps={};
   filtered.forEach(function(s){if(!grps[s.group])grps[s.group]=[];grps[s.group].push(s);});
   Object.keys(grps).sort().forEach(function(g){
-    // Group header (only show if showing multiple groups)
-    if(!groupFilter){
-      var hdr=document.createElement('div');
-      hdr.style.cssText='font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--txd);padding:5px 0 2px;margin-top:2px';
-      hdr.textContent=g;
-      list.appendChild(hdr);
-    }
+    var noneSelected=cfg.selectedSports.length>0&&cfg.selectedSports[0]==='__none__';
+    var groupKeys=grps[g].map(function(s){return s.key;});
+    var groupAllEnabled=!noneSelected&&groupKeys.every(function(k){
+      return cfg.selectedSports.length===0||cfg.selectedSports.indexOf(k)!==-1;
+    });
+
+    // Group header — always a checkbox row, even when filtered to one group
+    var grpHdr=document.createElement('label');
+    grpHdr.style.cssText='display:flex;align-items:center;gap:7px;font-size:9px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--txm);padding:5px 0 3px;margin-top:4px;cursor:pointer;user-select:none;border-bottom:1px solid var(--b1)';
+    var grpCb=document.createElement('input');
+    grpCb.type='checkbox';
+    grpCb.checked=groupAllEnabled;
+    grpCb.style.cssText='accent-color:var(--grn);width:12px;height:12px;cursor:pointer;flex-shrink:0';
+    grpCb.addEventListener('change',function(){
+      var checked=this.checked;
+      // Tick/untick all league rows in this group
+      groupKeys.forEach(function(k){
+        var cb=list.querySelector('input[data-sport-key="'+k+'"]');
+        if(cb){
+          cb.checked=checked;
+          var item=cb.closest('label');
+          if(item) item.classList.toggle('excluded',!checked);
+        }
+      });
+      syncSelectedSportsFromCheckboxes();
+      saveCfg();
+      updateSportSelCount();
+    });
+    var grpSpan=document.createElement('span');grpSpan.textContent=g;
+    grpHdr.appendChild(grpCb);grpHdr.appendChild(grpSpan);
+    list.appendChild(grpHdr);
+
     grps[g].forEach(function(s){
-      var noneSelected=cfg.selectedSports.length>0&&cfg.selectedSports[0]==='__none__';
       var enabled=!noneSelected&&(cfg.selectedSports.length===0||cfg.selectedSports.indexOf(s.key)!==-1);
       var item=document.createElement('label');
       item.className='book-item'+(enabled?'':' excluded');
+      item.style.paddingLeft='18px'; // indent under group header
       item.dataset.sportKey=s.key;
-      var cb=document.createElement('input');cb.type='checkbox';cb.checked=enabled;cb.dataset.sportKey=s.key;
+      var cb=document.createElement('input');
+      cb.type='checkbox';cb.checked=enabled;
+      cb.dataset.sportKey=s.key;
+      cb.setAttribute('data-sport-key',s.key); // for group cb querySelector
       cb.addEventListener('change',function(){
         item.classList.toggle('excluded',!this.checked);
+        // Update group checkbox to reflect partial/full state
+        var allChecked=groupKeys.every(function(k){
+          var c=list.querySelector('input[data-sport-key="'+k+'"]');
+          return c&&c.checked;
+        });
+        grpCb.checked=allChecked;
+        grpCb.indeterminate=!allChecked&&groupKeys.some(function(k){
+          var c=list.querySelector('input[data-sport-key="'+k+'"]');
+          return c&&c.checked;
+        });
         syncSelectedSportsFromCheckboxes();
         saveCfg();
         updateSportSelCount();
@@ -1478,6 +1516,12 @@ function buildSportList(sports,groupFilter){
       var span=document.createElement('span');span.textContent=s.title;
       item.appendChild(cb);item.appendChild(span);list.appendChild(item);
     });
+
+    // Set indeterminate state on group cb if only some leagues checked
+    var someChecked=groupKeys.some(function(k){
+      return cfg.selectedSports.length===0||(cfg.selectedSports.indexOf(k)!==-1&&!noneSelected);
+    });
+    grpCb.indeterminate=!noneSelected&&!groupAllEnabled&&someChecked;
   });
 }
 

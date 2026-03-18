@@ -320,13 +320,21 @@ select.sf option{background:var(--s2)}
       <div class="msec-t">The Odds API</div>
       <div class="fgrp">
         <div class="f"><label>API Key</label><input type="password" id="oddsKey" placeholder="Paste your key here (theoddsapi.com)…" autocomplete="new-password"></div>
-        <div class="f"><label>Regions (comma-separated)</label><input type="text" id="oddsRegions" placeholder="us"></div>
+        <div class="f">
+          <label>Regions <span style="color:var(--txd);font-weight:400">(include EU to get Pinnacle lines)</span></label>
+          <div style="display:flex;flex-direction:column;gap:5px;margin-top:4px">
+            <label class="book-item"><input type="checkbox" id="regionUs" checked style="accent-color:var(--grn)"> <span>US — DraftKings, FanDuel, BetMGM, Caesars…</span></label>
+            <label class="book-item"><input type="checkbox" id="regionEu" checked style="accent-color:var(--grn)"> <span style="color:var(--grn)">EU — <b>Pinnacle</b>, Bet365, William Hill… <span style="color:var(--txd)">(best for EV accuracy)</span></span></label>
+            <label class="book-item"><input type="checkbox" id="regionUk" style="accent-color:var(--grn)"> <span>UK — Betfair, Sky Bet, Paddy Power…</span></label>
+            <label class="book-item"><input type="checkbox" id="regionAu" style="accent-color:var(--grn)"> <span>AU — Sportsbet, Ladbrokes AU…</span></label>
+          </div>
+        </div>
       </div>
       <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
         <button class="btn2" style="flex:1;cursor:pointer" onclick="testKey()">&#9654; Test Key</button>
         <span id="testResult" style="font-size:10px;color:var(--txd)">—</span>
       </div>
-      <div class="hint">Free key at <b>the-odds-api.com</b> (500 req/month).</div>
+      <div class="hint">Free key at <b>the-odds-api.com</b> (500 req/month). Including <b style="color:var(--grn)">EU</b> is strongly recommended — it adds Pinnacle which gives the most accurate fair lines for +EV detection.</div>
     </div>
     <div class="msec">
       <div class="msec-t">Scanner Thresholds</div>
@@ -687,7 +695,7 @@ var BOOK_URLS={
 // STATE
 // ─────────────────────────────────────────────────────────────────────────────
 const cfg={
-  key:'',regions:'us',minEV:3,minArb:0.1,excludedBooks:[],
+  key:'',regions:'us,eu',minEV:3,minArb:0.1,excludedBooks:[],
   bankroll:1000,minProfit:0,soundAlerts:true,pushAlerts:true,staleMinutes:5,
   selectedSports:null
 };
@@ -711,7 +719,11 @@ function loadCfg(){
   try{
     var s=JSON.parse(localStorage.getItem('ef_cfg')||'{}');
     if(typeof s.key==='string') cfg.key=s.key;
-    if(typeof s.regions==='string') cfg.regions=s.regions;
+    if(typeof s.regions==='string'){
+      cfg.regions=s.regions;
+      // Migrate: if user only had 'us', upgrade to 'us,eu' so Pinnacle is included
+      if(cfg.regions==='us') cfg.regions='us,eu';
+    }
     if(typeof s.minEV==='number') cfg.minEV=s.minEV;
     if(typeof s.minArb==='number') cfg.minArb=s.minArb;
     if(typeof s.bankroll==='number') cfg.bankroll=s.bankroll;
@@ -930,7 +942,12 @@ function loadSportsMobile(){if(isMobile())closeSidebar();loadSports();}
 // ─────────────────────────────────────────────────────────────────────────────
 function openSet(){
   document.getElementById('oddsKey').value=cfg.key||'';
-  document.getElementById('oddsRegions').value=cfg.regions||'us';
+  // Populate region checkboxes from cfg.regions string
+  var r=cfg.regions||'us,eu';
+  document.getElementById('regionUs').checked=r.indexOf('us')!==-1;
+  document.getElementById('regionEu').checked=r.indexOf('eu')!==-1;
+  document.getElementById('regionUk').checked=r.indexOf('uk')!==-1;
+  document.getElementById('regionAu').checked=r.indexOf('au')!==-1;
   document.getElementById('cfgMinEV').value=cfg.minEV;
   document.getElementById('cfgMinArb').value=cfg.minArb;
   document.getElementById('cfgSound').value=cfg.soundAlerts?'1':'0';
@@ -942,7 +959,13 @@ function openSet(){
 function closeSet(){ closeModal('setModal'); }
 function saveSet(){
   cfg.key=document.getElementById('oddsKey').value.trim();
-  cfg.regions=document.getElementById('oddsRegions').value.trim()||'us';
+  // Build regions string from checkboxes
+  var r=[];
+  if(document.getElementById('regionUs').checked) r.push('us');
+  if(document.getElementById('regionEu').checked) r.push('eu');
+  if(document.getElementById('regionUk').checked) r.push('uk');
+  if(document.getElementById('regionAu').checked) r.push('au');
+  cfg.regions=r.length?r.join(','):'us';
   var ev=parseFloat(document.getElementById('cfgMinEV').value);
   var arb=parseFloat(document.getElementById('cfgMinArb').value);
   cfg.minEV=isNaN(ev)?3:ev;

@@ -229,6 +229,7 @@ select.sf option{background:var(--s2)}
 .eval-stake{font-size:11px;color:var(--txm);border-top:1px solid var(--b1);padding-top:8px;margin-top:4px}
 .eval-stake b{color:var(--txb)}
 .eval-profit{color:var(--grn)!important}
+.eval-bottomline{margin-top:10px;padding:10px 14px;border-radius:6px;border:2px solid;background:var(--s1);font-size:12px;line-height:1.4}
 .eval-action{display:inline-block;padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700;flex-shrink:0}
 .ea-strong{background:var(--grn2);color:var(--grn);border:1px solid var(--grn)}
 .ea-decent{background:var(--blu2);color:var(--blu);border:1px solid var(--blu)}
@@ -2131,6 +2132,22 @@ function renderEvalPanel(evalTd,result,tab,opp){
     stakeHtml='<div class="eval-stake">Suggested stake: <b>'+fmtDollars(ks)+'</b> (¼ Kelly = '+opp.kelly.toFixed(1)+'% of bankroll)</div>';
   }
 
+  // Bottom line — plain yes/no verdict
+  var bottomText,bottomColor,bottomIcon;
+  if(result.rating==='Strong'){
+    bottomIcon='✅'; bottomColor='var(--grn)';
+    bottomText='BET IT — this is a strong opportunity, act quickly.';
+  } else if(result.rating==='Decent'){
+    bottomIcon='👍'; bottomColor='var(--blu)';
+    bottomText='BET IT — solid edge, worth placing at the suggested stake.';
+  } else if(result.rating==='Caution'){
+    bottomIcon='⚠️'; bottomColor='var(--amb)';
+    bottomText='MAYBE — edge is marginal, bet small or skip if unsure.';
+  } else {
+    bottomIcon='🚫'; bottomColor='var(--red)';
+    bottomText='DON\'T BET — the risks outweigh the potential reward.';
+  }
+
   ep.innerHTML=
     '<div class="eval-header">'
       +'<span class="eval-action '+esc(result.ratingClass)+'">'+esc(result.rating)+'</span>'
@@ -2139,7 +2156,10 @@ function renderEvalPanel(evalTd,result,tab,opp){
     +(posHtml||flagHtml
       ?'<div class="eval-flags">'+posHtml+flagHtml+'</div>'
       :'')
-    +stakeHtml;
+    +stakeHtml
+    +'<div class="eval-bottomline" style="border-color:'+bottomColor+'">'
+      +bottomIcon+' <b style="color:'+bottomColor+'">'+bottomText+'</b>'
+    +'</div>';
   evalTd.innerHTML='';
   evalTd.appendChild(ep);
 }

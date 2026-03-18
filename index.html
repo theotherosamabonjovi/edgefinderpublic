@@ -217,20 +217,19 @@ select.sf option{background:var(--s2)}
 .gloss-t{font-size:10px;font-weight:600;color:var(--txb);margin-bottom:4px}
 .gloss-d{font-size:10px;color:var(--txm);line-height:1.7}
 /* ── EVAL PANEL ── */
-.eval-row td{padding:0!important;border-bottom:2px solid var(--pur)!important}
-.eval-panel{background:linear-gradient(135deg,var(--s2),var(--s3));border-left:3px solid var(--pur);padding:14px 16px;font-size:11px;line-height:1.65;animation:evalFadeIn .2s ease}
-@keyframes evalFadeIn{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
-.eval-loading{display:flex;align-items:center;gap:8px;color:var(--txm);font-size:11px;padding:10px 0}
-.eval-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:10px}
-@media(max-width:700px){.eval-grid{grid-template-columns:1fr}}
-.eval-card{background:var(--s1);border:1px solid var(--b2);border-radius:7px;padding:10px 12px}
-.eval-card-lbl{font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:var(--txd);margin-bottom:5px}
-.eval-card-body{font-size:11px;color:var(--tx);line-height:1.6}
-.eval-verdict{background:var(--s1);border:1px solid var(--b2);border-radius:7px;padding:10px 12px;margin-bottom:10px;color:var(--txb);line-height:1.65}
-.risk-low{color:var(--grn);font-weight:600}
-.risk-med{color:var(--amb);font-weight:600}
-.risk-high{color:var(--red);font-weight:600}
-.eval-action{display:inline-block;padding:2px 8px;border-radius:3px;font-size:10px;font-weight:600;margin-bottom:8px}
+.eval-xrow td{padding:0!important;border-bottom:2px solid var(--pur)!important}
+.eval-panel{background:var(--s2);border-left:3px solid var(--pur);padding:12px 16px;font-size:11px;line-height:1.6;animation:evalFadeIn .15s ease}
+@keyframes evalFadeIn{from{opacity:0;transform:translateY(-3px)}to{opacity:1;transform:none}}
+.eval-header{display:flex;align-items:flex-start;gap:10px;margin-bottom:10px;flex-wrap:wrap}
+.eval-summary{color:var(--tx);font-size:11px;line-height:1.6;flex:1;min-width:180px}
+.eval-flags{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+.eval-flag{font-size:10px;line-height:1.5;padding:3px 0}
+.eval-pos{color:var(--grn)}
+.eval-warn{color:var(--amb)}
+.eval-stake{font-size:11px;color:var(--txm);border-top:1px solid var(--b1);padding-top:8px;margin-top:4px}
+.eval-stake b{color:var(--txb)}
+.eval-profit{color:var(--grn)!important}
+.eval-action{display:inline-block;padding:3px 10px;border-radius:4px;font-size:10px;font-weight:700;flex-shrink:0}
 .ea-strong{background:var(--grn2);color:var(--grn);border:1px solid var(--grn)}
 .ea-decent{background:var(--blu2);color:var(--blu);border:1px solid var(--blu)}
 .ea-caution{background:var(--amb2);color:var(--amb);border:1px solid var(--amb)}
@@ -605,7 +604,7 @@ select.sf option{background:var(--s2)}
                 <input type="number" id="evalFairOdds" class="sf" placeholder="-110" oninput="evalUpdate()">
               </div>
               <div class="eval-field" style="display:flex;flex-direction:column;justify-content:flex-end">
-                <button class="aux-btn" onclick="evalPullFromScan()" style="font-size:10px;padding:8px">&#128269; Pull from scan results</button>
+                <button class="aux-btn" onclick="evalPullFromScan()" style="font-size:10px;padding:8px">&#128269; Pick from scan results</button>
               </div>
             </div>
             <div id="evalPullStatus" style="font-size:10px;color:var(--txd);margin-top:4px"></div>
@@ -1234,29 +1233,94 @@ function evalUpdate(){
 
 function evalPullFromScan(){
   var statusEl=document.getElementById('evalPullStatus');
-  var allOpps=appData.ev.concat(appData.arb.reduce(function(acc,o){
-    o.legs.forEach(function(l){acc.push({event:o.event,outcome:l.name,am:l.am,type:'arb'});});
-    return acc;
-  },[]));
-  if(!allOpps.length){statusEl.textContent='No scan results yet — run a scan first.';statusEl.style.color='var(--red)';return;}
-  // Find the opp whose odds are closest to what the user entered
-  var enteredOdds=parseFloat(document.getElementById('evalOdds').value);
-  if(isNaN(enteredOdds)){statusEl.textContent='Enter your odds in Step 1 first.';statusEl.style.color='var(--amb)';return;}
-  var enteredDec=toDecimal(enteredOdds);
-  var best=null,bestDist=Infinity;
-  allOpps.forEach(function(o){
-    var d=toDecimal(o.am);
-    if(!d)return;
-    var dist=Math.abs(d-enteredDec);
-    if(dist<bestDist){bestDist=dist;best=o;}
+  var evOpps=appData.ev||[];
+  var arbOpps=appData.arb||[];
+
+  if(!evOpps.length&&!arbOpps.length){
+    statusEl.innerHTML='<span style="color:var(--red)">No scan results yet — run a scan first, then come back.</span>';
+    return;
+  }
+
+  // Build a flat list of pickable items with all the info we need
+  var items=[];
+  evOpps.forEach(function(o){
+    items.push({
+      label:o.event+' — '+o.outcome+(o.point!=null?' '+o.point:'')+' @ '+fmtAm(o.am)+' ('+o.book+') EV+'+o.ev.toFixed(1)+'%',
+      odds:o.am,
+      fairAm:o.fairAm,
+      type:'ev'
+    });
   });
-  if(!best||bestDist>0.5){statusEl.textContent='No close match found in scan results. Enter fair odds manually.';statusEl.style.color='var(--amb)';return;}
-  // Use the matched opp's fair odds as the opposing side proxy
-  var fairAm=best.fairAm||best.am;
-  document.getElementById('evalFairOdds').value=fairAm;
-  statusEl.textContent='Matched: '+best.event+(best.outcome?' — '+best.outcome:'')+' ('+fmtAm(best.am)+')';
-  statusEl.style.color='var(--grn)';
-  evalUpdate();
+  arbOpps.forEach(function(o){
+    o.legs.forEach(function(l){
+      // For arb legs the fair odds = the sum-implied-prob no-vig price
+      // fairDec = 1 / (l.imp / o.sumImp * 1) — already = 1/l.imp
+      var fairDec=1/(o.sumImp/o.legs.length); // rough per-leg fair
+      // Better: use the actual implied prob for this leg
+      var legFairDec=1/l.imp;
+      var legFairAm=toAmerican(legFairDec);
+      items.push({
+        label:o.event+' — '+l.name+(l.point!=null?' '+l.point:'')+' @ '+fmtAm(l.am)+' ('+l.book+') ARB+'+o.pct.toFixed(2)+'%',
+        odds:l.am,
+        fairAm:legFairAm,
+        type:'arb'
+      });
+    });
+  });
+
+  // Build a dropdown picker inline
+  var pickerId='evalScanPicker';
+  var existing=document.getElementById(pickerId);
+  if(existing){existing.parentNode.removeChild(existing);}
+
+  var wrap=document.createElement('div');
+  wrap.id=pickerId;
+  wrap.style.cssText='margin-top:8px;background:var(--s3);border:1px solid var(--b2);border-radius:6px;padding:10px;max-height:200px;overflow-y:auto';
+
+  var searchInp=document.createElement('input');
+  searchInp.type='text';
+  searchInp.placeholder='Search events…';
+  searchInp.className='sf';
+  searchInp.style.cssText='width:100%;margin-bottom:8px;font-size:12px;padding:6px 8px';
+  wrap.appendChild(searchInp);
+
+  var list=document.createElement('div');
+  list.style.cssText='display:flex;flex-direction:column;gap:3px';
+  wrap.appendChild(list);
+
+  function renderList(filter){
+    list.innerHTML='';
+    var filtered=items.filter(function(it){
+      return!filter||it.label.toLowerCase().indexOf(filter.toLowerCase())!==-1;
+    });
+    if(!filtered.length){
+      list.innerHTML='<div style="color:var(--txd);font-size:10px;padding:4px 0">No matches</div>';
+      return;
+    }
+    filtered.slice(0,30).forEach(function(it){
+      var btn=document.createElement('button');
+      btn.className='aux-btn';
+      btn.style.cssText='text-align:left;font-size:10px;padding:5px 8px;white-space:normal;line-height:1.4;width:100%';
+      btn.textContent=it.label;
+      btn.addEventListener('click',function(){
+        document.getElementById('evalOdds').value=it.odds;
+        document.getElementById('evalFairOdds').value=it.fairAm;
+        statusEl.innerHTML='<span style="color:var(--grn)">✓ Loaded: '+esc(it.label)+'</span>';
+        wrap.parentNode.removeChild(wrap);
+        evalUpdate();
+      });
+      list.appendChild(btn);
+    });
+    if(filtered.length>30){
+      list.innerHTML+='<div style="color:var(--txd);font-size:9px;padding:4px 0">'+filtered.length+' results — type to filter</div>';
+    }
+  }
+
+  renderList('');
+  searchInp.addEventListener('input',function(){renderList(this.value);});
+  statusEl.innerHTML='';
+  statusEl.after ? statusEl.after(wrap) : statusEl.parentNode.insertBefore(wrap,statusEl.nextSibling);
+  searchInp.focus();
 }
 
 function toggleGlossary(){
@@ -1813,7 +1877,7 @@ function renderArb(){
         +'<div style="font-size:9px;color:var(--grn);margin-top:2px">'+esc(fmtDollars(profit))+'</div></td>'
       +'<td><div class="legs">'+legs+'</div></td>'
       +'<td><div class="row-actions">'
-        +'<button class="act-btn" data-action="explain" style="border-color:var(--pur);color:var(--pur)">✦ Explain</button>'
+        +'<button class="act-btn" data-action="explain" style="border-color:var(--pur);color:var(--pur)">▸ Evaluate</button>'
         +'<button class="act-btn log" data-action="log" data-tab="arb">Log</button>'
         +(isDismissed
           ?'<button class="act-btn" data-action="undismiss">Restore</button>'
@@ -1822,7 +1886,7 @@ function renderArb(){
     tbody.appendChild(tr);
     // Expansion row for eval panel (hidden by default)
     var evalTr=document.createElement('tr');
-    evalTr.className='eval-row';
+    evalTr.className='eval-xrow';
     evalTr.style.display='none';
     var evalTd=document.createElement('td');
     evalTd.colSpan=6;
@@ -1895,7 +1959,7 @@ function renderEV(){
       +'<td><span class="badge '+esc(evB)+'">+'+esc(o.ev.toFixed(1))+'%</span></td>'
       +'<td style="color:var(--amb);font-size:10px">'+esc(o.kelly.toFixed(1))+'%<div style="font-size:9px;color:var(--txb)">'+esc(fmtDollars(kellyDollar))+'</div></td>'
       +'<td><div class="row-actions">'
-        +'<button class="act-btn" data-action="explain" style="border-color:var(--pur);color:var(--pur)">✦ Explain</button>'
+        +'<button class="act-btn" data-action="explain" style="border-color:var(--pur);color:var(--pur)">▸ Evaluate</button>'
         +'<button class="act-btn log" data-action="log" data-tab="ev">Log</button>'
         +(isDismissed
           ?'<button class="act-btn" data-action="undismiss">Restore</button>'
@@ -1904,7 +1968,7 @@ function renderEV(){
     tbody.appendChild(tr);
     // Expansion row for eval panel (hidden by default)
     var evalTr=document.createElement('tr');
-    evalTr.className='eval-row';
+    evalTr.className='eval-xrow';
     evalTr.style.display='none';
     var evalTd=document.createElement('td');
     evalTd.colSpan=8;
@@ -1929,140 +1993,156 @@ function renderEV(){
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AI BET EVALUATOR
+// BET EVALUATOR  (rule-based, instant, no API needed)
 // ─────────────────────────────────────────────────────────────────────────────
-var evalCache={}; // sig → parsed eval result
+
+// Books considered sharp enough that their lines are meaningful signals
+var SHARP_BOOKS=['Pinnacle','Pinnacle Sports','Bookmaker','Circa Sports','Betcris','Bet365','William Hill','BetOnline.ag'];
+function isSharpBook(n){return SHARP_BOOKS.indexOf(n)!==-1;}
+
+function evalArb(opp){
+  var bankroll=cfg.bankroll||1000;
+  var profit=bankroll*(opp.pct/100);
+  var legs=opp.legs||[];
+  var numLegs=legs.length;
+  var hasSharpLeg=legs.some(function(l){return isSharpBook(l.book);});
+  var softOnly=legs.every(function(l){return!isSharpBook(l.book);});
+  var points=0;
+  var flags=[];
+  var positives=[];
+
+  // Score by arb percentage
+  if(opp.pct>=2)     {points+=3;positives.push('Large arb margin of +'+opp.pct.toFixed(2)+'% — strong edge');}
+  else if(opp.pct>=1){points+=2;positives.push('Solid arb margin of +'+opp.pct.toFixed(2)+'%');}
+  else if(opp.pct>=0.4){points+=1;positives.push('Thin margin of +'+opp.pct.toFixed(2)+'% — still profitable');}
+  else               {points+=0;flags.push('Very thin margin (+'+opp.pct.toFixed(2)+'%) — small execution errors eat the profit');}
+
+  // Profit in dollar terms
+  if(profit>=20)     positives.push(fmtDollars(profit)+' profit on a '+fmtDollars(bankroll)+' bankroll');
+  else               flags.push('Only '+fmtDollars(profit)+' profit — consider if it\'s worth the effort');
+
+  // Number of legs
+  if(numLegs===2)    {points+=1;positives.push('Two-leg arb — simpler to place');}
+  else               {flags.push(numLegs+'-leg arb — harder to execute, all legs must be placed simultaneously');}
+
+  // Book quality
+  if(softOnly)       {points-=1;flags.push('Both books are soft ('+legs.map(function(l){return l.book;}).join(', ')+') — limits may be low and accounts can get restricted quickly');}
+  else if(hasSharpLeg) positives.push('At least one sharp book involved — line is likely real');
+
+  // Rating
+  var rating, ratingClass, summary;
+  if(points>=4)      {rating='Strong';  ratingClass='ea-strong'; summary='This looks like a genuine arb with good margin. Place both legs quickly — arb windows close fast.';}
+  else if(points>=2) {rating='Decent';  ratingClass='ea-decent'; summary='Reasonable arb opportunity. Watch out for execution risk — odds can change before you finish placing.';}
+  else if(points>=1) {rating='Caution'; ratingClass='ea-caution';summary='Marginal arb — the math works but the profit is thin. Even a small delay or limit rejection can wipe the edge.';}
+  else               {rating='Skip';    ratingClass='ea-skip';   summary='Not recommended. Either the margin is too thin, execution is too complex, or book restrictions make it risky.';}
+
+  return{rating:rating,ratingClass:ratingClass,summary:summary,positives:positives,flags:flags};
+}
+
+function evalEV(opp){
+  var bankroll=cfg.bankroll||1000;
+  var kellyDollar=bankroll*(opp.kelly/100);
+  var points=0;
+  var flags=[];
+  var positives=[];
+
+  // Score by EV%
+  if(opp.ev>=10)     {points+=3;positives.push('High edge of +'+opp.ev.toFixed(1)+'% — well above typical +EV threshold');}
+  else if(opp.ev>=6) {points+=2;positives.push('Strong edge of +'+opp.ev.toFixed(1)+'%');}
+  else if(opp.ev>=3) {points+=1;positives.push('Moderate edge of +'+opp.ev.toFixed(1)+'%');}
+  else               {points+=0;flags.push('Small edge of +'+opp.ev.toFixed(1)+'% — meaningful over many bets but not large individually');}
+
+  // Devig reliability
+  if(opp.devigMethod==='Pinnacle no-vig'){
+    points+=2;
+    positives.push('Fair line sourced from Pinnacle — the sharpest benchmark in the industry');
+  } else if(opp.reliable){
+    points+=1;
+    positives.push('Fair line sourced from sharp-weighted books ('+opp.devigMethod+')');
+  } else {
+    points-=1;
+    flags.push('Fair line from "'+opp.devigMethod+'" — Pinnacle not available, so edge estimate is less certain');
+  }
+
+  // Book taking the bet
+  if(isSharpBook(opp.book)){
+    flags.push(opp.book+' is a sharp book — they may limit you quickly once they notice you\'re +EV betting');
+  } else {
+    points+=1;
+    positives.push(opp.book+' is a softer book — more likely to accept larger stakes without limiting');
+  }
+
+  // Kelly size — a proxy for how confident the model is
+  if(opp.kelly>=5)   {points+=1;positives.push('Kelly recommends '+opp.kelly.toFixed(1)+'% ('+fmtDollars(kellyDollar)+') — model has high conviction');}
+  else if(opp.kelly>=2) positives.push('Kelly recommends '+opp.kelly.toFixed(1)+'% ('+fmtDollars(kellyDollar)+')');
+  else               flags.push('Kelly only '+opp.kelly.toFixed(1)+'% — low conviction, consider a smaller stake');
+
+  // Rating
+  var rating, ratingClass, summary;
+  if(points>=5)      {rating='Strong';  ratingClass='ea-strong'; summary='High-confidence +EV bet with a reliable fair line and solid edge. Worth betting the Kelly-recommended amount.';}
+  else if(points>=3) {rating='Decent';  ratingClass='ea-decent'; summary='Good +EV bet. The edge is real but variance means you won\'t win every time — that\'s normal, stick to the process.';}
+  else if(points>=1) {rating='Caution'; ratingClass='ea-caution';summary='Edge exists but has question marks — either the fair line is uncertain or the margin is thin. Bet small if at all.';}
+  else               {rating='Skip';    ratingClass='ea-skip';   summary='Too much uncertainty in the fair line or the edge is too small to act on confidently.';}
+
+  return{rating:rating,ratingClass:ratingClass,summary:summary,positives:positives,flags:flags};
+}
 
 function toggleEvalPanel(evalTr,evalTd,sig,tab,btn){
   var isOpen=evalTr.style.display!=='none';
   if(isOpen){
     evalTr.style.display='none';
-    btn.textContent='✦ Explain';
+    btn.textContent='▸ Evaluate';
     btn.style.background='';
     return;
   }
   evalTr.style.display='';
-  btn.textContent='▲ Close';
+  btn.textContent='▴ Close';
   btn.style.background='var(--pur2)';
 
-  // Already cached — render immediately
-  if(evalCache[sig]){renderEvalPanel(evalTd,evalCache[sig]);return;}
-
-  // Show loading state
-  evalTd.innerHTML='';
-  var lp=document.createElement('div');
-  lp.className='eval-panel';
-  lp.innerHTML='<div class="eval-loading"><span class="spin" style="border-top-color:var(--pur)"></span>Analysing this bet…</div>';
-  evalTd.appendChild(lp);
-
-  // Find the opp object
   var allOpps=tab==='arb'?appData.arb:appData.ev;
   var opp=null;
   for(var i=0;i<allOpps.length;i++){if(oppSig(allOpps[i])===sig){opp=allOpps[i];break;}}
-  if(!opp){lp.innerHTML='<div style="color:var(--red);padding:8px">Could not find bet data.</div>';return;}
+  if(!opp){evalTd.innerHTML='<div class="eval-panel" style="color:var(--red)">Bet data not found.</div>';return;}
 
-  fetchEval(opp,tab).then(function(result){
-    evalCache[sig]=result;
-    renderEvalPanel(evalTd,result);
-  }).catch(function(e){
-    evalTd.innerHTML='';
-    var ep=document.createElement('div');ep.className='eval-panel';
-    ep.innerHTML='<span style="color:var(--red)">AI evaluation failed: '+esc(e.message)+'</span>';
-    evalTd.appendChild(ep);
-  });
+  var result=tab==='arb'?evalArb(opp):evalEV(opp);
+  renderEvalPanel(evalTd,result,tab,opp);
 }
 
-function buildEvalPrompt(opp,tab){
+function renderEvalPanel(evalTd,result,tab,opp){
   var bankroll=cfg.bankroll||1000;
-  if(tab==='arb'){
-    var profit=(bankroll*(opp.pct/100)).toFixed(2);
-    var legsText=opp.legs.map(function(l){
-      return '- '+l.name+(l.point!=null?' ('+l.point+')':'')+' @ '+fmtAm(l.am)+' on '+l.book+' (stake: '+fmtDollars(bankroll*(parseFloat(l.stake)/100))+')';
-    }).join('\n');
-    return 'You are a professional sports betting analyst helping a beginner understand a bet.\n\n'
-      +'BET TYPE: Arbitrage (guaranteed profit if placed correctly)\n'
-      +'EVENT: '+opp.event+'\n'
-      +'MARKET: '+opp.marketType+'\n'
-      +'ARB %: +'+opp.pct.toFixed(2)+'%\n'
-      +'PROFIT on $'+bankroll+' bankroll: $'+profit+'\n'
-      +'LEGS:\n'+legsText+'\n\n'
-      +'Respond ONLY with a JSON object (no markdown, no backticks) with these exact keys:\n'
-      +'{\n'
-      +' "verdict": "2-3 sentence plain-English explanation of what this bet is and why it makes money",\n'
-      +' "risk": "Low" or "Medium" or "High",\n'
-      +' "risk_reason": "1-2 sentences on the main risk (e.g. bet limits, account restrictions, execution speed)",\n'
-      +' "sharp_take": "1-2 sentences on what a sharp/professional bettor would think of this opportunity",\n'
-      +' "action": "Strong" or "Decent" or "Caution" or "Skip"\n'
-      +'}';
-  } else {
-    return 'You are a professional sports betting analyst helping a beginner understand a bet.\n\n'
-      +'BET TYPE: Positive Expected Value (+EV)\n'
-      +'EVENT: '+opp.event+'\n'
-      +'MARKET: '+opp.marketType+'\n'
-      +'OUTCOME: '+opp.outcome+(opp.point!=null?' ('+opp.point+')':'')+'\n'
-      +'BOOK: '+opp.book+'\n'
-      +'ODDS: '+fmtAm(opp.am)+' (decimal '+opp.dec.toFixed(3)+')\n'
-      +'FAIR ODDS (no-vig): '+opp.fairAm+'\n'
-      +'EDGE: +'+opp.ev.toFixed(1)+'%\n'
-      +'¼ KELLY STAKE: '+opp.kelly.toFixed(1)+'% of bankroll ($'+fmtDollars(bankroll*(opp.kelly/100))+')\n'
-      +'DEVIG METHOD: '+opp.devigMethod+(opp.reliable?' (reliable)'  :' (lower confidence)')+'\n\n'
-      +'Respond ONLY with a JSON object (no markdown, no backticks) with these exact keys:\n'
-      +'{\n'
-      +' "verdict": "2-3 sentence plain-English explanation of what this bet is and why the edge exists",\n'
-      +' "risk": "Low" or "Medium" or "High",\n'
-      +' "risk_reason": "1-2 sentences on key risks (variance, line confidence, book limits)",\n'
-      +' "sharp_take": "1-2 sentences on what a sharp/professional bettor would think of this edge",\n'
-      +' "action": "Strong" or "Decent" or "Caution" or "Skip"\n'
-      +'}';
-  }
-}
-
-async function fetchEval(opp,tab){
-  var prompt=buildEvalPrompt(opp,tab);
-  var resp=await fetch('https://api.anthropic.com/v1/messages',{
-    method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({
-      model:'claude-sonnet-4-20250514',
-      max_tokens:600,
-      system:'You are a sharp sports betting analyst. Always respond with valid JSON only — no markdown fences, no preamble.',
-      messages:[{role:'user',content:prompt}]
-    })
-  });
-  if(!resp.ok){var e=await resp.json().catch(function(){return{};});throw new Error(e.error&&e.error.message?e.error.message:'API error '+resp.status);}
-  var data=await resp.json();
-  var text=data.content.filter(function(b){return b.type==='text';}).map(function(b){return b.text;}).join('');
-  // Strip any accidental markdown fences
-  text=text.replace(/```json|```/g,'').trim();
-  return JSON.parse(text);
-}
-
-function renderEvalPanel(evalTd,result){
-  var actionClass={Strong:'ea-strong',Decent:'ea-decent',Caution:'ea-caution',Skip:'ea-skip'}[result.action]||'ea-caution';
-  var riskClass={Low:'risk-low',Medium:'risk-med',High:'risk-high'}[result.risk]||'risk-med';
-  evalTd.innerHTML='';
   var ep=document.createElement('div');
   ep.className='eval-panel';
+
+  // Build positives / flags HTML
+  var posHtml=result.positives.map(function(p){
+    return'<div class="eval-flag eval-pos">✓ '+esc(p)+'</div>';
+  }).join('');
+  var flagHtml=result.flags.map(function(f){
+    return'<div class="eval-flag eval-warn">⚠ '+esc(f)+'</div>';
+  }).join('');
+
+  // Stake suggestion line
+  var stakeHtml='';
+  if(tab==='arb'){
+    var profit=(bankroll*(opp.pct/100));
+    stakeHtml='<div class="eval-stake">Spread <b>'+fmtDollars(bankroll)+'</b> across legs for <b class="eval-profit">'+fmtDollars(profit)+' guaranteed profit</b></div>';
+  } else {
+    var ks=bankroll*(opp.kelly/100);
+    stakeHtml='<div class="eval-stake">Suggested stake: <b>'+fmtDollars(ks)+'</b> (¼ Kelly = '+opp.kelly.toFixed(1)+'% of bankroll)</div>';
+  }
+
   ep.innerHTML=
-    '<span class="eval-action '+esc(actionClass)+'">'+esc(result.action||'—')+'</span>'
-    +'<div class="eval-verdict">'+esc(result.verdict||'')+'</div>'
-    +'<div class="eval-grid">'
-      +'<div class="eval-card">'
-        +'<div class="eval-card-lbl">⚠ Risk Rating</div>'
-        +'<div class="eval-card-body"><span class="'+esc(riskClass)+'">'+esc(result.risk||'—')+'</span><br>'+esc(result.risk_reason||'')+'</div>'
-      +'</div>'
-      +'<div class="eval-card">'
-        +'<div class="eval-card-lbl">🎯 Sharp Money Take</div>'
-        +'<div class="eval-card-body">'+esc(result.sharp_take||'')+'</div>'
-      +'</div>'
-      +'<div class="eval-card" style="border-color:var(--pur);background:var(--pur2)">'
-        +'<div class="eval-card-lbl" style="color:var(--pur)">✦ AI Verdict</div>'
-        +'<div class="eval-card-body" style="color:var(--txb)">This evaluation uses the bet\'s actual odds, edge size, and book reputation. Always verify odds before placing.</div>'
-      +'</div>'
-    +'</div>';
+    '<div class="eval-header">'
+      +'<span class="eval-action '+esc(result.ratingClass)+'">'+esc(result.rating)+'</span>'
+      +'<span class="eval-summary">'+esc(result.summary)+'</span>'
+    +'</div>'
+    +(posHtml||flagHtml
+      ?'<div class="eval-flags">'+posHtml+flagHtml+'</div>'
+      :'')
+    +stakeHtml;
+  evalTd.innerHTML='';
   evalTd.appendChild(ep);
 }
-
 
 function openLogBet(tab,sig){
   var opp=null;

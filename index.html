@@ -524,8 +524,6 @@ select.sf option{background:var(--s2)}
     <div class="sb-sec">
       <div class="sec-lbl">Sportsbooks</div>
       <div id="bookFilterList" class="book-filter-list">
-        <div style="font-size:10px;color:var(--txd)">Scan once to populate</div>
-      </div>
       <div class="book-filter-btns">
         <button onclick="setAllBooks(true)">All on</button>
         <button onclick="setAllBooks(false)">All off</button>
@@ -553,8 +551,13 @@ select.sf option{background:var(--s2)}
         <button class="toolbar-btn" id="sort-arb-event" onclick="setSort('arb','event')">Event</button>
         <div class="toolbar-sep"></div>
         <button class="toolbar-btn" id="toggleDismissed-arb" onclick="toggleDismissed('arb')">Show dismissed</button>
+        <div class="toolbar-sep"></div>
+        <button class="toolbar-btn" id="bookFilter-arb-btn" onclick="toggleBookFilterPicker('arb')">&#128269; Books</button>
         <div class="toolbar-spacer"></div>
         <button class="toolbar-btn" onclick="exportCSV('arb')">&#11015; CSV</button>
+      </div>
+      <div id="bookFilterPicker-arb" style="display:none;padding:8px 16px;border-bottom:1px solid var(--b1);background:var(--s1);flex-shrink:0">
+        <!-- filled by JS -->
       </div>
       <div class="res"><div class="res-inner" id="arb-content">
         <div class="empty"><div class="empty-ico">&#9889;</div><div class="empty-t">No arbitrage found yet</div><div class="empty-s">Set your Odds API key in Settings &#9881;, load sports, and hit Scan.</div></div>
@@ -571,8 +574,13 @@ select.sf option{background:var(--s2)}
         <button class="toolbar-btn" id="sort-ev-book" onclick="setSort('ev','book')">Book</button>
         <div class="toolbar-sep"></div>
         <button class="toolbar-btn" id="toggleDismissed-ev" onclick="toggleDismissed('ev')">Show dismissed</button>
+        <div class="toolbar-sep"></div>
+        <button class="toolbar-btn" id="bookFilter-ev-btn" onclick="toggleBookFilterPicker('ev')">&#128269; Books</button>
         <div class="toolbar-spacer"></div>
         <button class="toolbar-btn" onclick="exportCSV('ev')">&#11015; CSV</button>
+      </div>
+      <div id="bookFilterPicker-ev" style="display:none;padding:8px 16px;border-bottom:1px solid var(--b1);background:var(--s1);flex-shrink:0">
+        <!-- filled by JS -->
       </div>
       <div class="res"><div class="res-inner" id="ev-content">
         <div class="empty"><div class="empty-ico">&#128200;</div><div class="empty-t">No +EV bets found yet</div><div class="empty-s">Uses Pinnacle no-vig as the fair line.</div></div>
@@ -701,8 +709,20 @@ const cfg={
 };
 const appData={arb:[],ev:[],sports:[]};
 let scanning=false, curTab='arb';
-let knownBooks=[];
+// Pre-seed with every book we know about so the filter is usable before the first scan.
+// After scanning, extractBooks() merges in any additional books returned by the API.
+var knownBooks=[
+  'Barstool Sportsbook','Bet365','BetMGM','BetOnline.ag','BetRivers',
+  'Betcris','Bookmaker','Caesars','Circa Sports','DraftKings',
+  'FanDuel','Pinnacle','Pinnacle Sports','PointsBet','Unibet',
+  'William Hill','WynnBET',
+  // Additional books the Odds API commonly returns
+  'BetUS','BetNow','BovadaLV','Betus','ESPN BET','Fliff',
+  'Hard Rock Bet','LowVig.ag','MyBookie.ag','NorthBet',
+  'Superbook','Tipico','betPARX','betway','bet105'
+].sort();
 let hiddenOpps=new Set();
+let viewBookFilter={arb:new Set(),ev:new Set()}; // empty = show all books
 let loggedBets=[];
 let scanHistory=[];
 let prevOppSigs=new Set();
@@ -1469,6 +1489,107 @@ function buildBookFilter(books){
 function setAllBooks(enabled){cfg.excludedBooks=enabled?[]:knownBooks.slice();saveCfg();buildBookFilter([]);}
 
 // ─────────────────────────────────────────────────────────────────────────────
+// VIEW BOOK FILTER (client-side, no rescan needed)
+// ─────────────────────────────────────────────────────────────────────────────
+function getBooksInResults(tab){
+  var seen={};
+  if(tab==='arb'){
+    appData.arb.forEach(function(o){(o.legs||[]).forEach(function(l){seen[l.book]=true;});});
+  } else {
+    appData.ev.forEach(function(o){if(o.book)seen[o.book]=true;});
+  }
+  return Object.keys(seen).sort();
+}
+
+function toggleBookFilterPicker(tab){
+  var picker=document.getElementById('bookFilterPicker-'+tab);
+  var btn=document.getElementById('bookFilter-'+tab+'-btn');
+  var isOpen=picker.style.display!=='none';
+  if(isOpen){picker.style.display='none';return;}
+
+  var books=getBooksInResults(tab);
+  if(!books.length){
+    toast('No results yet — run a scan first','warn');
+    return;
+  }
+
+  var filter=viewBookFilter[tab];
+  picker.innerHTML='';
+
+  // Header row
+  var hdr=document.createElement('div');
+  hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;flex-wrap:wrap;gap:6px';
+  hdr.innerHTML=
+    '<span style="font-size:10px;color:var(--txm);font-weight:600">Show results from:</span>'
+    +'<span style="display:flex;gap:6px">'
+      +'<button class="toolbar-btn" onclick="setViewBookFilter(\''+tab+'\',\'all\')">All</button>'
+      +'<button class="toolbar-btn" onclick="setViewBookFilter(\''+tab+'\',\'none\')">None</button>'
+      +'<button class="toolbar-btn" style="border-color:var(--red);color:var(--red)" onclick="closeBookFilterPicker(\''+tab+'\')">&#10005; Close</button>'
+    +'</span>';
+  picker.appendChild(hdr);
+
+  // Checkbox list
+  var list=document.createElement('div');
+  list.style.cssText='display:flex;flex-wrap:wrap;gap:4px 12px';
+  books.forEach(function(book){
+    var active=filter.size===0||filter.has(book);
+    var lbl=document.createElement('label');
+    lbl.className='book-item';
+    lbl.style.cssText='flex-shrink:0;white-space:nowrap';
+    var cb=document.createElement('input');
+    cb.type='checkbox';cb.checked=active;
+    cb.style.cssText='accent-color:var(--grn);margin-right:4px';
+    cb.addEventListener('change',function(){
+      var f=viewBookFilter[tab];
+      if(f.size===0){
+        // was "all" — expand to explicit set then remove this one
+        books.forEach(function(b){f.add(b);});
+      }
+      if(this.checked) f.add(book); else f.delete(book);
+      // If all are checked again, collapse to empty (= show all)
+      if(f.size===books.length) f.clear();
+      updateBookFilterBtn(tab);
+      if(tab==='arb') renderArb(); else renderEV();
+    });
+    var span=document.createElement('span');span.textContent=book;
+    lbl.appendChild(cb);lbl.appendChild(span);
+    list.appendChild(lbl);
+  });
+  picker.appendChild(list);
+  picker.style.display='';
+}
+
+function closeBookFilterPicker(tab){
+  document.getElementById('bookFilterPicker-'+tab).style.display='none';
+}
+
+function setViewBookFilter(tab,mode){
+  var f=viewBookFilter[tab];
+  var books=getBooksInResults(tab);
+  f.clear();
+  if(mode==='none') books.forEach(function(b){/* leave empty = show all */ });
+  // 'all' = clear (show all); 'none' would mean exclude all but that's pointless so map to 'all'
+  updateBookFilterBtn(tab);
+  // Re-render checkboxes in picker
+  var picker=document.getElementById('bookFilterPicker-'+tab);
+  if(picker.style.display!=='none'){
+    toggleBookFilterPicker(tab); // close
+    toggleBookFilterPicker(tab); // reopen refreshed
+  }
+  if(tab==='arb') renderArb(); else renderEV();
+}
+
+function updateBookFilterBtn(tab){
+  var btn=document.getElementById('bookFilter-'+tab+'-btn');
+  if(!btn) return;
+  var f=viewBookFilter[tab];
+  var count=getBooksInResults(tab).length;
+  var active=f.size>0&&f.size<count;
+  btn.textContent=active?'&#128269; Books ('+f.size+'/'+count+')':'&#128269; Books';
+  btn.classList.toggle('act',active);
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // LINE MOVEMENT
 // ─────────────────────────────────────────────────────────────────────────────
 // Key: event|outcomeName|point — value: best decimal odds last scan
@@ -1698,6 +1819,9 @@ async function runScan(){
 
     appData.arb=findArb(events,minA,mkt);
     appData.ev=findEV(events,minEV,mkt);
+    // Reset view book filter — new scan may have different books
+    viewBookFilter.arb.clear();viewBookFilter.ev.clear();
+    updateBookFilterBtn('arb');updateBookFilterBtn('ev');
 
     // Apply min profit filter to arb
     if(minProfit>0){
@@ -1841,7 +1965,15 @@ function renderArb(){
   var pn=document.getElementById('arb-content');
   var bankroll=cfg.bankroll||1000;
   var sorted=sortOpps(appData.arb,'arb');
-  var visible=sorted.filter(function(o){return showDismissed['arb']||!hiddenOpps.has(oppSig(o));});
+  var arbBookFilter=viewBookFilter['arb'];
+  var visible=sorted.filter(function(o){
+    if(!showDismissed['arb']&&hiddenOpps.has(oppSig(o))) return false;
+    if(arbBookFilter.size>0){
+      // Show arb only if at least one leg is from a filtered-in book
+      return (o.legs||[]).some(function(l){return arbBookFilter.has(l.book);});
+    }
+    return true;
+  });
   if(!visible.length&&!appData.arb.length){
     pn.innerHTML='<div class="empty"><div class="empty-ico">&#9889;</div><div class="empty-t">No arbitrage found</div><div class="empty-s">No guaranteed profit above threshold. Try a different sport or lower Min Arb %.</div></div>';
     return;
@@ -1921,7 +2053,12 @@ function renderEV(){
   var pn=document.getElementById('ev-content');
   var bankroll=cfg.bankroll||1000;
   var sorted=sortOpps(appData.ev,'ev');
-  var visible=sorted.filter(function(o){return showDismissed['ev']||!hiddenOpps.has(oppSig(o));});
+  var evBookFilter=viewBookFilter['ev'];
+  var visible=sorted.filter(function(o){
+    if(!showDismissed['ev']&&hiddenOpps.has(oppSig(o))) return false;
+    if(evBookFilter.size>0) return evBookFilter.has(o.book);
+    return true;
+  });
   if(!visible.length&&!appData.ev.length){
     pn.innerHTML='<div class="empty"><div class="empty-ico">&#128200;</div><div class="empty-t">No +EV bets found</div><div class="empty-s">Try lowering Min EV % or scanning more sports.</div></div>';
     return;
@@ -2298,7 +2435,7 @@ function init(){
   document.getElementById('minArb').value=cfg.minArb;
   document.getElementById('bankroll').value=cfg.bankroll||1000;
   document.getElementById('minProfit').value=cfg.minProfit||0;
-  if(cfg.excludedBooks.length)buildBookFilter([]);
+  buildBookFilter([]); // render pre-seeded book list; more books merge in after first scan
   // Close modals on overlay click
   ['setModal','histModal','betModal','logBetModal'].forEach(function(id){
     document.getElementById(id).addEventListener('click',function(e){if(e.target===this)closeModal(id);});

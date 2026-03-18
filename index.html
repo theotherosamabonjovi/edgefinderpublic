@@ -736,7 +736,7 @@ var BOOK_URLS={
 const cfg={
   key:'',regions:'us',minEV:3,minArb:0.1,excludedBooks:[],
   bankroll:1000,minProfit:0,soundAlerts:true,pushAlerts:true,staleMinutes:5,
-  selectedSports:[]
+  selectedSports:null
 };
 const appData={arb:[],ev:[],sports:[]};
 let scanning=false, curTab='arb';
@@ -766,7 +766,12 @@ function loadCfg(){
     if(typeof s.soundAlerts==='boolean') cfg.soundAlerts=s.soundAlerts;
     if(typeof s.pushAlerts==='boolean') cfg.pushAlerts=s.pushAlerts;
     if(typeof s.staleMinutes==='number') cfg.staleMinutes=s.staleMinutes;
-    if(Array.isArray(s.selectedSports)) cfg.selectedSports=s.selectedSports;
+    // selectedSports: null=all, []=none, [keys]=explicit. Migrate old sentinel.
+    if(s.selectedSports===null||s.selectedSports===undefined) cfg.selectedSports=null;
+    else if(Array.isArray(s.selectedSports)){
+      if(s.selectedSports.length===0||s.selectedSports[0]==='__none__') cfg.selectedSports=s.selectedSports.length===0?null:[];
+      else cfg.selectedSports=s.selectedSports;
+    }
     if(Array.isArray(s.excludedBooks)) cfg.excludedBooks=s.excludedBooks;
   }catch(e){}
   try{
@@ -1417,13 +1422,13 @@ async function loadSports(){
     // Build checkbox list — restore saved selections, default all checked
     buildSportList(sports,'');
     // If we have saved selections, apply them
-    if(cfg.selectedSports&&cfg.selectedSports.length>0){
+    if(cfg.selectedSports!==null&&cfg.selectedSports!==undefined&&cfg.selectedSports.length>=0){
       var list=document.getElementById('sportSelList');
       if(list){
         list.querySelectorAll('input[type=checkbox]').forEach(function(cb){
-          var key=cb.dataset.sportKey;
+          var key=cb.getAttribute('data-sport-key');
           if(key){
-            var checked=cfg.selectedSports.indexOf(key)!==-1;
+            var checked=cfg.selectedSports===null||cfg.selectedSports.indexOf(key)!==-1;
             cb.checked=checked;
             var item=cb.closest('label');
             if(item) item.classList.toggle('excluded',!checked);
@@ -1459,8 +1464,9 @@ function buildSportList(sports,groupFilter){
 
     // Determine initial state for this group's sports
     function isSportEnabled(key){
-      // empty array = all on; non-empty = explicit list
-      return cfg.selectedSports.length===0||cfg.selectedSports.indexOf(key)!==-1;
+      // null = all on; [] = all off; [keys] = explicit inclusion list
+      if(cfg.selectedSports===null||cfg.selectedSports===undefined) return true;
+      return cfg.selectedSports.indexOf(key)!==-1;
     }
     var groupAllEnabled=groupKeys.every(isSportEnabled);
     var groupSomeEnabled=groupKeys.some(isSportEnabled);
@@ -1525,18 +1531,21 @@ function buildSportList(sports,groupFilter){
   });
 }
 
-// Ensure cfg.selectedSports is an explicit key list (not the "all" empty shorthand)
-// before we start adding/removing individual keys.
+// Ensure cfg.selectedSports is an explicit key list before adding/removing.
+// null  = all sports selected (compact form)
+// []    = no sports selected
+// [k..] = explicit inclusion list
 function ensureExplicitSportsList(){
-  if(cfg.selectedSports.length===0){
+  if(cfg.selectedSports===null||cfg.selectedSports===undefined){
     cfg.selectedSports=appData.sports.map(function(s){return s.key;});
   }
+  // [] means none — leave it alone so we can add keys into it
 }
 
-// If every sport is selected, collapse back to [] ("all") to keep storage compact.
+// Collapse back to null ("all") when every sport is explicitly included.
 function normaliseSelectedSports(){
-  if(cfg.selectedSports.length===appData.sports.length){
-    cfg.selectedSports=[];
+  if(cfg.selectedSports&&cfg.selectedSports.length===appData.sports.length){
+    cfg.selectedSports=null;
   }
 }
 
@@ -1551,29 +1560,22 @@ function updateSportSelCount(){
   if(!el)return;
   var total=appData.sports.length;
   if(!total){el.textContent='';return;}
-  // getCheckedSportKeys returns the full set (all keys if cfg.selectedSports is empty)
   var selected=getCheckedSportKeys().length;
   el.textContent='('+selected+'/'+total+')';
   el.style.color=selected===total?'var(--txd)':'var(--grn)';
 }
 
 function getCheckedSportKeys(){
-  if(!cfg.selectedSports||cfg.selectedSports.length===0){
+  // null = all selected
+  if(cfg.selectedSports===null||cfg.selectedSports===undefined){
     return appData.sports.map(function(s){return s.key;});
   }
-  if(cfg.selectedSports[0]==='__none__') return [];
+  // [] = none selected; [keys] = explicit list
   return cfg.selectedSports.slice();
 }
 
 function setAllSports(enabled){
-  if(enabled){
-    cfg.selectedSports=[]; // [] = all on
-  } else {
-    // Explicitly exclude everything by storing all keys, then we remove them all
-    // Simplest: just store every key as "excluded" — but our model is inclusion-based.
-    // So "all off" = store a list with no valid keys. We use a single invalid sentinel.
-    cfg.selectedSports=['__none__'];
-  }
+  cfg.selectedSports=enabled?null:[];
   var list=document.getElementById('sportSelList');
   if(list){
     list.querySelectorAll('input[type=checkbox]').forEach(function(cb){

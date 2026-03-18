@@ -528,7 +528,8 @@ select.sf option{background:var(--s2)}
         <button onclick="setAllBooks(true)">All on</button>
         <button onclick="setAllBooks(false)">All off</button>
       </div>
-    </div>
+    </div><!-- /#bookFilterList -->
+    </div><!-- /.sb-sec -->
 
     <button class="scan-btn" id="scanBtn" onclick="runScanMobile()">&#9654; SCAN MARKETS</button>
     <button class="aux-btn" id="loadSportsBtn" onclick="loadSportsMobile()">&#8635; Load Sports List</button>
@@ -773,17 +774,27 @@ function loadCfg(){
   }catch(e){}
 }
 function saveCfg(){
-  localStorage.setItem('ef_cfg',JSON.stringify({
+  try{localStorage.setItem('ef_cfg',JSON.stringify({
     key:cfg.key,regions:cfg.regions,minEV:cfg.minEV,minArb:cfg.minArb,
     bankroll:cfg.bankroll,minProfit:cfg.minProfit,soundAlerts:cfg.soundAlerts,
     pushAlerts:cfg.pushAlerts,staleMinutes:cfg.staleMinutes,
     selectedSports:cfg.selectedSports,
     excludedBooks:cfg.excludedBooks
-  }));
+  }));}
+  catch(e){console.warn('EdgeFinder: could not save config',e);}
 }
-function saveHidden(){ localStorage.setItem('ef_hidden',JSON.stringify(Array.from(hiddenOpps))); }
-function saveBets(){ localStorage.setItem('ef_bets',JSON.stringify(loggedBets)); }
-function saveHistory(){ localStorage.setItem('ef_history',JSON.stringify(scanHistory)); }
+function saveHidden(){
+  try{localStorage.setItem('ef_hidden',JSON.stringify(Array.from(hiddenOpps)));}
+  catch(e){console.warn('EdgeFinder: could not save hidden list',e);}
+}
+function saveBets(){
+  try{localStorage.setItem('ef_bets',JSON.stringify(loggedBets));}
+  catch(e){console.warn('EdgeFinder: could not save bets',e);}
+}
+function saveHistory(){
+  try{localStorage.setItem('ef_history',JSON.stringify(scanHistory));}
+  catch(e){console.warn('EdgeFinder: could not save history',e);}
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TOAST
@@ -934,8 +945,15 @@ function shareSnapshot(){
     });
   }
 }
-function openModal(id){ document.getElementById(id).classList.add('open'); }
-function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+var VALID_MODAL_IDS=new Set(['setModal','histModal','betModal','logBetModal']);
+function openModal(id){
+  if(!VALID_MODAL_IDS.has(id))return;
+  document.getElementById(id).classList.add('open');
+}
+function closeModal(id){
+  if(!VALID_MODAL_IDS.has(id))return;
+  document.getElementById(id).classList.remove('open');
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MOBILE SIDEBAR
@@ -1205,8 +1223,11 @@ function convFrom(src){
 // MATH
 // ─────────────────────────────────────────────────────────────────────────────
 function toDecimal(am){var n=parseFloat(am);if(isNaN(n))return null;return n>0?n/100+1:100/Math.abs(n)+1;}
-function toAmerican(dec){return dec>=2?'+'+(Math.round((dec-1)*100)):''+(Math.round(-100/(dec-1)));}
-function fmtAm(am){var n=parseFloat(am);return n>0?'+'+n:String(n);}
+function toAmerican(dec){
+  if(!dec||dec<=1)return'—';
+  return dec>=2?'+'+(Math.round((dec-1)*100)):''+(Math.round(-100/(dec-1)));
+}
+function fmtAm(am){var n=parseFloat(am);if(isNaN(n))return'—';return n>0?'+'+n:String(n);}
 function fmtTime(iso){
   if(!iso)return'—';
   var d=new Date(iso);
@@ -1346,8 +1367,12 @@ function buildSportList(sports,groupFilter){
       saveCfg(); updateSportSelCount();
       // Reflect in league checkboxes
       groupKeys.forEach(function(k){
-        var cb=list.querySelector('input[data-sport-key="'+k+'"]');
-        if(cb){cb.checked=on;var item=cb.closest('label');if(item)item.classList.toggle('excluded',!on);}
+        list.querySelectorAll('input[data-sport-key]').forEach(function(cb){
+          if(cb.getAttribute('data-sport-key')===k){
+            cb.checked=on;
+            var item=cb.closest('label');if(item)item.classList.toggle('excluded',!on);
+          }
+        });
       });
     });
     var grpSpan=document.createElement('span');grpSpan.textContent=g;
@@ -1374,8 +1399,16 @@ function buildSportList(sports,groupFilter){
         normaliseSelectedSports();
         saveCfg(); updateSportSelCount();
         // Sync group checkbox state
-        var allOn=groupKeys.every(function(k){var c=list.querySelector('input[data-sport-key="'+k+'"]');return c&&c.checked;});
-        var anyOn=groupKeys.some(function(k){var c=list.querySelector('input[data-sport-key="'+k+'"]');return c&&c.checked;});
+        var allOn=groupKeys.every(function(k){
+          var found=null;
+          list.querySelectorAll('input[data-sport-key]').forEach(function(c){if(c.getAttribute('data-sport-key')===k)found=c;});
+          return found&&found.checked;
+        });
+        var anyOn=groupKeys.some(function(k){
+          var found=null;
+          list.querySelectorAll('input[data-sport-key]').forEach(function(c){if(c.getAttribute('data-sport-key')===k)found=c;});
+          return found&&found.checked;
+        });
         grpCb.checked=allOn;
         grpCb.indeterminate=!allOn&&anyOn;
       });
@@ -1522,13 +1555,18 @@ function toggleBookFilterPicker(tab){
   // Header row
   var hdr=document.createElement('div');
   hdr.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;flex-wrap:wrap;gap:6px';
-  hdr.innerHTML=
-    '<span style="font-size:10px;color:var(--txm);font-weight:600">Show results from:</span>'
-    +'<span style="display:flex;gap:6px">'
-      +'<button class="toolbar-btn" onclick="setViewBookFilter(\''+tab+'\',\'all\')">All</button>'
-      +'<button class="toolbar-btn" onclick="setViewBookFilter(\''+tab+'\',\'none\')">None</button>'
-      +'<button class="toolbar-btn" style="border-color:var(--red);color:var(--red)" onclick="closeBookFilterPicker(\''+tab+'\')">&#10005; Close</button>'
-    +'</span>';
+  var allBtn=document.createElement('button');allBtn.className='toolbar-btn';allBtn.textContent='All';
+  allBtn.addEventListener('click',function(){setViewBookFilter(tab,'all');});
+  var noneBtn=document.createElement('button');noneBtn.className='toolbar-btn';noneBtn.textContent='None';
+  noneBtn.addEventListener('click',function(){setViewBookFilter(tab,'none');});
+  var closeBtn=document.createElement('button');closeBtn.className='toolbar-btn';
+  closeBtn.style.cssText='border-color:var(--red);color:var(--red)';closeBtn.textContent='✕ Close';
+  closeBtn.addEventListener('click',function(){closeBookFilterPicker(tab);});
+  var hdrLabel=document.createElement('span');
+  hdrLabel.style.cssText='font-size:10px;color:var(--txm);font-weight:600';hdrLabel.textContent='Show results from:';
+  var hdrBtns=document.createElement('span');hdrBtns.style.cssText='display:flex;gap:6px';
+  hdrBtns.appendChild(allBtn);hdrBtns.appendChild(noneBtn);hdrBtns.appendChild(closeBtn);
+  hdr.appendChild(hdrLabel);hdr.appendChild(hdrBtns);
   picker.appendChild(hdr);
 
   // Checkbox list
@@ -1964,6 +2002,12 @@ function undismissAll(){hiddenOpps.clear();saveHidden();renderArb();renderEV();}
 // ─────────────────────────────────────────────────────────────────────────────
 // EXPORT CSV
 // ─────────────────────────────────────────────────────────────────────────────
+// Prevent CSV formula injection: prefix dangerous leading chars with a single quote
+function csvSafe(c){
+  var s=String(c).replace(/"/g,'""');
+  if(/^[=+\-@\t\r]/.test(s))s="'"+s;
+  return s.includes(',')||s.includes('"')||s.includes("'")?'"'+s+'"':s;
+}
 function exportCSV(tab){
   var rows,headers;
   var bankroll=cfg.bankroll||1000;
@@ -1982,7 +2026,7 @@ function exportCSV(tab){
       return[o.event,o.sport,o.marketType||'',fmtTime(o.time),o.outcome,(o.point!=null?o.point:''),o.book,fmtAm(o.am),o.fairAm,o.ev.toFixed(2),o.kelly.toFixed(2),fmtDollars(bankroll*(o.kelly/100)),o.devigMethod];
     });
   }
-  var csv=[headers.join(',')].concat(rows.map(function(r){return r.map(function(c){var s=String(c).replace(/"/g,'""');return s.includes(',')||s.includes('"')?'"'+s+'"':s;}).join(',');})).join('\n');
+  var csv=[headers.join(',')].concat(rows.map(function(r){return r.map(csvSafe).join(',');})).join('\n');
   var a=document.createElement('a');
   a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);
   a.download='edgefinder_'+tab+'_'+new Date().toISOString().slice(0,10)+'.csv';
@@ -2383,7 +2427,7 @@ function clearBets(){if(confirm('Clear all logged bets?')){loggedBets=[];saveBet
 function updateBetLogStatus(){
   loggedBets.forEach(function(b){
     var live=false;
-    if(b.tab==='arb'){live=appData.arb.some(function(o){return o.event===b.event&&o.pct.toFixed(2)===b.pct.toFixed(2);});}
+    if(b.tab==='arb'){live=appData.arb.some(function(o){return o.event===b.event&&o.pct.toFixed(2)===Number(b.pct).toFixed(2);});}
     else{live=appData.ev.some(function(o){return o.event===b.event&&o.outcome===b.outcome&&o.book===b.book;});}
     b.stillLive=live;
     if(live&&b.tab!=='arb'){
@@ -2404,9 +2448,9 @@ function renderBetLog(){
     var statusHtml=b.stillLive?'<span class="bet-status live">Still live</span>':'<span class="bet-status moved">Line moved</span>';
     var details='';
     if(b.tab==='arb'){
-      details='Arb: +'+b.pct.toFixed(2)+'%<br>'+b.legs.map(function(l){return esc(l.name)+(l.point!=null?' ('+esc(String(l.point))+')':'')+' @ '+esc(fmtAm(l.am))+' — '+esc(l.book);}).join('<br>');
+      details='Arb: +'+Number(b.pct).toFixed(2)+'%<br>'+b.legs.map(function(l){return esc(l.name)+(l.point!=null?' ('+esc(String(l.point))+')':'')+' @ '+esc(fmtAm(l.am))+' — '+esc(l.book);}).join('<br>');
     }else{
-      details=esc(b.outcome)+(b.point!=null?' ('+esc(String(b.point))+')':'')+' @ '+esc(fmtAm(b.am))+' ('+esc(b.book)+') — EV +'+b.ev.toFixed(1)+'%';
+      details=esc(b.outcome)+(b.point!=null?' ('+esc(String(b.point))+')':'')+' @ '+esc(fmtAm(b.am))+' ('+esc(b.book)+') — EV +'+Number(b.ev).toFixed(1)+'%';
       if(b.currentAm&&b.stillLive)details+='<br><span style="color:var(--txd);font-size:9px">Current best: '+esc(fmtAm(b.currentAm))+'</span>';
     }
     if(b.notes)details+='<br><span style="color:var(--txd);font-size:9px">Note: '+esc(b.notes)+'</span>';
@@ -2428,7 +2472,7 @@ function exportBetsCSV(){
     var outcomeStr=b.tab==='arb'?b.legs.map(function(l){return l.name+(l.point!=null?' '+l.point:'')+' @'+fmtAm(l.am)+' ('+l.book+')';}).join('; '):(b.outcome+(b.point!=null?' '+b.point:'')+' @'+fmtAm(b.am));
     return[ts,b.event,b.sport||'',b.marketType||'',b.tab,outcomeStr,b.tab==='arb'?'multiple':b.book,b.tab==='arb'?b.pct+'% arb':fmtAm(b.am),b.ev?b.ev.toFixed(1):'',b.kelly?b.kelly.toFixed(1):'',b.stillLive?'Live':'Moved',b.notes||''];
   });
-  var csv=[headers.join(',')].concat(rows.map(function(r){return r.map(function(c){var s=String(c).replace(/"/g,'""');return s.includes(',')||s.includes('"')?'"'+s+'"':s;}).join(',');})).join('\n');
+  var csv=[headers.join(',')].concat(rows.map(function(r){return r.map(csvSafe).join(',');})).join('\n');
   var a=document.createElement('a');a.href='data:text/csv;charset=utf-8,'+encodeURIComponent(csv);a.download='edgefinder_bets_'+new Date().toISOString().slice(0,10)+'.csv';a.click();
 }
 
@@ -2442,16 +2486,17 @@ function renderHistory(){
   scanHistory.forEach(function(h){
     var div=document.createElement('div');div.className='hist-item';
     var ts=new Date(h.ts).toLocaleString('en-US',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
-    var newBadge=(h.newArb+h.newEV)>0?'<span style="color:var(--grn);font-size:9px;margin-left:6px">+'+( h.newArb+h.newEV)+' new</span>':'';
+    var newTotal=(+h.newArb||0)+(+h.newEV||0);
+    var newBadge=newTotal>0?'<span style="color:var(--grn);font-size:9px;margin-left:6px">+'+esc(String(newTotal))+' new</span>':'';
     div.innerHTML='<div>'
       +'<div class="hist-time">'+esc(ts)+' · '+esc((h.mkt||'h2h').toUpperCase())+newBadge+'</div>'
       +'<div class="hist-stats">'
-        +'<span style="color:var(--grn)">'+h.arbCount+' arb</span>'
-        +'<span style="color:var(--amb)">'+h.evCount+' +EV</span>'
+        +'<span style="color:var(--grn)">'+esc(String(h.arbCount|0))+' arb</span>'
+        +'<span style="color:var(--amb)">'+esc(String(h.evCount|0))+' +EV</span>'
       +'</div>'
       +'<div class="hist-best">'
-        +(h.topArb?'Best arb: +'+h.topArb+'%':'')+' '
-        +(h.topEV?'Best EV: +'+h.topEV+'%':'')
+        +(h.topArb?'Best arb: +'+esc(String(h.topArb))+'%':'')+' '
+        +(h.topEV?'Best EV: +'+esc(String(h.topEV))+'%':'')
       +'</div>'
       +'</div>';
     pn.appendChild(div);

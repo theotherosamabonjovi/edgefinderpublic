@@ -1446,8 +1446,11 @@ function setAllSports(enabled){
 async function fetchOdds(sportKey,mkt){
   if(!cfg.key||!sportKey)return[];
   try{
+    // Encode each region individually — encodeURIComponent on the whole string
+    // would turn 'us,eu' into 'us%2Ceu' which the API does not accept.
+    var regionsParam=(cfg.regions||'us,eu').split(',').map(function(r){return encodeURIComponent(r.trim());}).join(',');
     var url='https://api.the-odds-api.com/v4/sports/'+encodeURIComponent(sportKey)+'/odds'
-      +'?regions='+encodeURIComponent(cfg.regions)+'&markets='+encodeURIComponent(mkt)+'&oddsFormat=american';
+      +'?regions='+regionsParam+'&markets='+encodeURIComponent(mkt)+'&oddsFormat=american';
     return await oddsApiFetch(url);
   }catch(e){
     document.getElementById('sdOdds').className='sd err';
@@ -1541,13 +1544,16 @@ function toggleBookFilterPicker(tab){
     cb.style.cssText='accent-color:var(--grn);margin-right:4px';
     cb.addEventListener('change',function(){
       var f=viewBookFilter[tab];
+      // Remove sentinel if present
+      f.delete('__none__');
       if(f.size===0){
-        // was "all" — expand to explicit set then remove this one
+        // Was showing all — expand to explicit set first
         books.forEach(function(b){f.add(b);});
       }
       if(this.checked) f.add(book); else f.delete(book);
-      // If all are checked again, collapse to empty (= show all)
-      if(f.size===books.length) f.clear();
+      // Collapse back to "show all" if everything is checked
+      var realBooks=books.filter(function(b){return b!=='__none__';});
+      if(f.size===realBooks.length) f.clear();
       updateBookFilterBtn(tab);
       if(tab==='arb') renderArb(); else renderEV();
     });
@@ -1566,15 +1572,20 @@ function closeBookFilterPicker(tab){
 function setViewBookFilter(tab,mode){
   var f=viewBookFilter[tab];
   var books=getBooksInResults(tab);
-  f.clear();
-  if(mode==='none') books.forEach(function(b){/* leave empty = show all */ });
-  // 'all' = clear (show all); 'none' would mean exclude all but that's pointless so map to 'all'
+  if(mode==='all'){
+    f.clear(); // empty set = show all
+  } else {
+    // 'none' = exclude every book — store a single placeholder that matches nothing
+    // so size>0 triggers the filter, but no real book matches it
+    f.clear();
+    f.add('__none__');
+  }
   updateBookFilterBtn(tab);
-  // Re-render checkboxes in picker
+  // Rebuild the picker checkboxes to reflect the new state
   var picker=document.getElementById('bookFilterPicker-'+tab);
-  if(picker.style.display!=='none'){
-    toggleBookFilterPicker(tab); // close
-    toggleBookFilterPicker(tab); // reopen refreshed
+  if(picker&&picker.style.display!=='none'){
+    toggleBookFilterPicker(tab); // close then reopen to rebuild checkboxes
+    toggleBookFilterPicker(tab);
   }
   if(tab==='arb') renderArb(); else renderEV();
 }
@@ -1966,10 +1977,11 @@ function renderArb(){
   var bankroll=cfg.bankroll||1000;
   var sorted=sortOpps(appData.arb,'arb');
   var arbBookFilter=viewBookFilter['arb'];
+  var arbFilterActive=arbBookFilter.size>0&&!(arbBookFilter.size===1&&arbBookFilter.has('__none__'));
   var visible=sorted.filter(function(o){
     if(!showDismissed['arb']&&hiddenOpps.has(oppSig(o))) return false;
-    if(arbBookFilter.size>0){
-      // Show arb only if at least one leg is from a filtered-in book
+    if(arbBookFilter.has('__none__')) return false; // "None" selected
+    if(arbFilterActive){
       return (o.legs||[]).some(function(l){return arbBookFilter.has(l.book);});
     }
     return true;
@@ -2056,6 +2068,7 @@ function renderEV(){
   var evBookFilter=viewBookFilter['ev'];
   var visible=sorted.filter(function(o){
     if(!showDismissed['ev']&&hiddenOpps.has(oppSig(o))) return false;
+    if(evBookFilter.has('__none__')) return false;
     if(evBookFilter.size>0) return evBookFilter.has(o.book);
     return true;
   });

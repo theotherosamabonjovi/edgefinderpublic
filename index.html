@@ -1734,29 +1734,49 @@ function findEV(events,minPct,mkt){
   var evMethod=(document.getElementById('evMethod')||{value:'pinnacle'}).value||'pinnacle';
   var opps=[];
   events.forEach(function(ev){
-    var sigMap={};
+    // Build two maps:
+    // bbo      — ALL books, used for fair-line calculation (Pinnacle must be here)
+    // bboElig  — only bet-eligible books, used to find the best odds to actually bet
+    var sigMap={};    // all books
+    var sigMapElig={}; // enabled books only
     (ev.bookmakers||[]).forEach(function(bm){
-      if(!isBookEnabled(bm.title))return;
+      var eligible=isBookEnabled(bm.title);
       (bm.markets||[]).forEach(function(mktObj){
         var outcomes=mktObj.outcomes||[];
         if(!outcomes.length)return;
         var sig=marketSig(outcomes);
+        // Always add to all-books map for devigging
         if(!sigMap[sig])sigMap[sig]={};
         outcomes.forEach(function(out){
           var dec=toDecimal(out.price);if(!dec)return;
           if(!sigMap[sig][out.name])sigMap[sig][out.name]=[];
           sigMap[sig][out.name].push({book:bm.title,am:out.price,dec:dec,point:(out.point!==undefined?out.point:null)});
         });
+        // Only add to eligible map if book is enabled (betting target)
+        if(eligible){
+          if(!sigMapElig[sig])sigMapElig[sig]={};
+          outcomes.forEach(function(out){
+            var dec=toDecimal(out.price);if(!dec)return;
+            if(!sigMapElig[sig][out.name])sigMapElig[sig][out.name]=[];
+            sigMapElig[sig][out.name].push({book:bm.title,am:out.price,dec:dec,point:(out.point!==undefined?out.point:null)});
+          });
+        }
       });
     });
     Object.keys(sigMap).forEach(function(sig){
-      var bbo=sigMap[sig];
+      var bbo=sigMap[sig];        // all books — for fair line
+      var bboElig=sigMapElig[sig]; // enabled only — for betting target
       var names=Object.keys(bbo);
       if(names.length<2)return;
+      // Need at least 2 sides with eligible books to have a bettable edge
+      if(!bboElig||Object.keys(bboElig).length<1)return;
       var result=evMethod==='pinnacle'?devigPinnacleFirst(bbo):evMethod==='weighted'?devigWeighted(bbo):evMethod==='midmarket'?devigMidMarket(bbo):devigSimpleAverage(bbo);
       var fair=result.fair;
       names.forEach(function(name){
-        var bestO=bbo[name].reduce(function(a,b){return b.dec>a.dec?b:a;});
+        // Only surface this outcome if there's an eligible book to bet it at
+        var eligBooks=bboElig&&bboElig[name];
+        if(!eligBooks||!eligBooks.length)return;
+        var bestO=eligBooks.reduce(function(a,b){return b.dec>a.dec?b:a;});
         var evPct=(fair[name]*bestO.dec-1)*100;
         var kelly=Math.max(0,(fair[name]*bestO.dec-1)/(bestO.dec-1)*100*0.25);
         if(evPct>=minPct){
